@@ -123,7 +123,7 @@ public partial class MainPage
             }
             
             result = await Task.Run(() => Calculate.GetResult2(bestPlay, northHand, southHand, calculateSettings));
-            analysis = await Task.Run(() => SuitAnalysis.Analyse(result, 25));
+            analysis = await Task.Run(() => SuitAnalysis.Analyse(result));
             StatusLabel.Text = $"Nord : {FrenchText.HandToString(northHand)}    Sud : {FrenchText.HandToString(southHand)}    (calcul en {stopWatch.Elapsed.TotalSeconds:0.0} s)";
             ShowResults();
             EnableButtons(true);

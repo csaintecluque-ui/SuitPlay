@@ -10,6 +10,8 @@
     <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
     <!-- Le moteur utilise de la réflexion pour la sérialisation : on évite un découpage trop agressif -->
     <TrimMode>partial</TrimMode>
+    <!-- Compilation native (AOT) : calculs beaucoup plus rapides dans le navigateur -->
+    <RunAOTCompilation>true</RunAOTCompilation>
   </PropertyGroup>
 
   <ItemGroup>

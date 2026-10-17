@@ -41,7 +41,7 @@ public class SuitAnalysis
 
     /// <summary>Analyse une combinaison déjà calculée par le moteur.</summary>
     /// <param name="perCriterion">Nombre de lignes retenues par critère avant d'être rejouées (compromis précision/rapidité).</param>
-    public static SuitAnalysis Analyse(Result2 result, int perCriterion = 15)
+    public static SuitAnalysis Analyse(Result2 result, int perCriterion = 40)
     {
         var roughLines = result.LineItems.Select(line => (Line: line, Outcomes: LineComparison.Outcomes(line, result))).ToList();
         var candidates = LineComparison.Candidates(roughLines, l => l.Outcomes, perCriterion);
