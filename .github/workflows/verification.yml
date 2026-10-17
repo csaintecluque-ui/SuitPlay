@@ -1,0 +1,46 @@
+# Compare notre moteur aux résultats connus du SuitPlay original et publie le rapport
+name: Comparer avec l'original
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "master" ]
+    paths:
+      - "Calculator/**"
+      - "Verification/**"
+      - ".github/workflows/verification.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Installer .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Lancer la comparaison
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet run --project Verification/Verification.csproj -c Release -- Calculator/etalons-suitplay "$PWD/rapport.md" 2>&1 | tee run.log || {
+            grep -E ": error |Exception" run.log | sed -E 's/^.*: error /error /' | sort -u | head -10 | sed 's/^/::error::/'
+            exit 1
+          }
+          cat rapport.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publier le rapport sur la branche rapports
+        shell: bash
+        run: |
+          mkdir publish && cp rapport.md publish/
+          cd publish
+          git init -q
+          git checkout -q -b rapports
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -q -m "Rapport de comparaison"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" rapports
