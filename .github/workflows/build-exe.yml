@@ -1,5 +1,4 @@
 # Compile SuitPlay (version Windows) en un dossier contenant SuitPlay.exe
-# A placer dans .github/workflows/build-exe.yml de votre copie (fork) du projet
 name: Build SuitPlay exe
 
 on:
@@ -11,29 +10,33 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Installer .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
       - name: Installer .NET MAUI
         run: dotnet workload install maui
 
-      - name: Compiler SuitPlay.exe (autonome, sans installation)
-        run: >
-          dotnet publish SuitPlay/SuitPlay.csproj
-          -c Release
-          -f net10.0-windows10.0.19041.0
-          -r win-x64
-          -p:WindowsPackageType=None
-          -p:SelfContained=true
-          -p:WindowsAppSDKSelfContained=true
-          -o out
+      - name: Compiler SuitPlay.exe
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet build SuitPlay/SuitPlay.csproj -c Release \
+            -f net10.0-windows10.0.19041.0 \
+            -p:RuntimeIdentifier=win-x64 \
+            -p:WindowsPackageType=None \
+            -p:SelfContained=true \
+            -p:WindowsAppSDKSelfContained=true \
+            2>&1 | tee build.log || {
+              grep -E ": error " build.log | sed -E 's/^.*: error /error /' | sort -u | head -10 | sed 's/^/::error::/'
+              exit 1
+            }
 
       - name: Mettre le resultat a disposition
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SuitPlay-Windows
-          path: out
+          path: SuitPlay/bin/Release/net10.0-windows10.0.19041.0/win-x64/
