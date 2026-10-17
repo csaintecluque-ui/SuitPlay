@@ -149,9 +149,15 @@ public static class LineEvaluator
             }
             else
             {
-                // À la défense : elle choisit la réponse la plus gênante, parmi toutes ses cartes
-                // (sans les raccourcis du moteur, qui interdisent parfois de couvrir à tort)
-                var options = DefenderCards(played, initialCards);
+                // À la défense : elle choisit la réponse la plus gênante parmi les coups du moteur,
+                // plus la possibilité de couvrir (le moteur l'interdit parfois à tort en 2e main)
+                var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, settings);
+                if (position == 1)
+                {
+                    var cover = CheapestCover(played, initialCards);
+                    if (cover.HasValue && !options.Contains(cover.Value))
+                        options = options.Append(cover.Value).ToList();
+                }
                 value = options.Min(card => Play(played, card));
             }
 
@@ -186,20 +192,14 @@ public static class LineEvaluator
         return null;
     }
 
-    /// <summary>
-    /// Toutes les cartes que le défenseur à jouer peut fournir, en ne gardant qu'une carte par groupe
-    /// de cartes équivalentes (consécutives face aux cartes de Nord-Sud restantes).
-    /// </summary>
-    private static List<Face> DefenderCards(Cards played, Dictionary<Player, List<Face>> initialCards)
+    /// <summary>Plus petite carte du 2e joueur qui bat la carte d'entame, s'il en a une.</summary>
+    private static Face? CheapestCover(Cards played, Dictionary<Player, List<Face>> initialCards)
     {
         var trick = played.Chunk(4).Last();
         var leader = initialCards.First(x => x.Value.Contains(trick[0])).Key;
         var player = (Player)(((int)leader + trick.Length) % 4);
-        var cards = initialCards[player].Except(played.Data).OrderDescending().ToList();
-        if (cards.Count == 0)
-            return [Face.Dummy];
-        var remainingNS = initialCards[Player.North].Concat(initialCards[Player.South]).Except(played.Data).ToList();
-        return MiniMax.AvailableCardsFiltered(cards, remainingNS).ToList();
+        var higher = initialCards[player].Except(played.Data).Where(c => c > trick[0]).ToList();
+        return higher.Count == 0 ? null : higher.Min();
     }
 
     /// <summary>Cartes que Nord-Sud peuvent légalement jouer maintenant.</summary>
