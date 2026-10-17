@@ -122,6 +122,10 @@
         <p class="status @(isError ? "error" : "")">@status</p>
     }
 
+    @if (result != null && !busy && approximateNote != null)
+    {
+        <p class="status">⚠ @approximateNote</p>
+    }
     @if (result != null && !busy)
     {
         <section class="panel" id="resultats">
@@ -253,6 +257,7 @@
     private int entriesNorth = 1;
 
     private bool busy;
+    private string approximateNote;
     private string status;
     private bool isError;
 
@@ -332,6 +337,10 @@
             result = Calculate.GetResult2(bestPlay, north, south, settings);
             analysis = SuitAnalysis.Analyse(result, settings: miniMaxSettings);
             PrepareGoals();
+            if (result?.Truncated == true)
+                approximateNote = "Combinaison très riche : toutes les lignes de jeu n'ont pas pu être examinées en détail. Les résultats sont une bonne approximation, pas une certitude.";
+            else
+                approximateNote = null;
             var entriesText = miniMaxSettings.EntriesNorth is { } entries ? $"   ·   entrées au mort : {entries}" : "";
             var discardText = discarded.Length > 0 ? $"   ·   défausses : {HandText('D')}" : "";
             status = $"Nord : {HandText('N')}   ·   Sud : {HandText('S')}{discardText}{entriesText}   ·   calcul en {Num(watch.Elapsed.TotalSeconds, "0.0")} s";

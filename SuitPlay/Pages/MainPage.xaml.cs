@@ -142,6 +142,8 @@ public partial class MainPage
                 entriesText = $"    Défausses : {FrenchText.HandToString(discardedCards)}" + entriesText;
             StatusLabel.Text = $"Nord : {FrenchText.HandToString(northHand)}    Sud : {FrenchText.HandToString(southHand)}{entriesText}    (calcul en {stopWatch.Elapsed.TotalSeconds:0.0} s)";
             ShowResults();
+            if (result?.Truncated == true)
+                StatusLabel.Text += "\n⚠ Combinaison très riche : toutes les lignes de jeu n'ont pas pu être examinées en détail. Les résultats sont une bonne approximation, pas une certitude.";
             EnableButtons(true);
         }
         catch (MaxLinesException)

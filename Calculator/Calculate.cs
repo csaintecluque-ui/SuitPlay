@@ -20,6 +20,11 @@ public class Calculate
         public int VacantPlacesEast { get; set; } = 13;
         /// <summary>Cartes de Nord-Sud qui ne seront pas jouées dans la couleur (défausses ou coupes).</summary>
         public Face[] Discarded { get; init; } = [];
+        /// <summary>
+        /// Au-delà de <see cref="MaxLines"/> lignes : true = on garde les lignes déjà construites et on continue
+        /// (résultat approché) ; false = on abandonne (comportement d'origine).
+        /// </summary>
+        public bool ApproximateWhenTooManyLines { get; init; } = true;
     }
     private static readonly ArrayEqualityComparer<Face> ArrayEqualityComparer = new();
     private static readonly FaceArrayComparer FaceArrayComparer = new();
@@ -58,6 +63,7 @@ public class Calculate
         var distributionList = GetDistributionItems(cardsNS, combinationsInTree, calculateSettings.VacantPlacesEast, calculateSettings.VacantPlacesWest, calculateSettings.Discarded);
         var possibleNrOfTricks = bestPlay.SelectMany(x => x.Value).Select(x => x.Tricks).Distinct().OrderDescending().SkipLast(1).ToList();
         var combinationsInSuitPlay = new List<Face[]>();
+        var truncated = false;
 
         return new Result2
         {
@@ -67,6 +73,7 @@ public class Calculate
             North = north,
             South = south,
             Discarded = calculateSettings.Discarded ?? [],
+            Truncated = truncated,
             CombinationsInSuitPlay = combinationsInSuitPlay 
         };
 
@@ -208,11 +215,20 @@ public class Calculate
                 foreach (var lineItem in lineItems)
                 {
                     var play = new Cards(lineItem.Line.MaxBy(x => x.Count()).Take(shortestCount).ToList());
+                    if (truncated)
+                        break;
                     if (TryCreateExtraLinesForPlay(play, lineItem, out var lineItemsForPlay, false))
                     {
+                        if (lineItems.Count + extraLines.Count + lineItemsForPlay.Count > calculateSettings.MaxLines)
+                        {
+                            if (!calculateSettings.ApproximateWhenTooManyLines)
+                                throw new MaxLinesException();
+                            // Trop de lignes : on garde la ligne d'origine au lieu de la détailler, et on s'arrête là
+                            linesToRemove.Remove(lineItem);
+                            truncated = true;
+                            break;
+                        }
                         extraLines.AddRange(lineItemsForPlay);
-                        if (lineItems.Count + extraLines.Count > calculateSettings.MaxLines)
-                            throw new MaxLinesException();
                     }
                 }
                 lineItems.Capacity = lineItems.Count +  extraLines.Count;
