@@ -43,10 +43,12 @@ public class SuitAnalysis
     /// <param name="perCriterion">Nombre de lignes retenues par critère avant d'être rejouées (compromis précision/rapidité).</param>
     public static SuitAnalysis Analyse(Result2 result, int perCriterion = 40, MiniMax.MiniMaxSettings settings = null)
     {
+        // Le juge laisse toujours la défense fournir de fausses cartes, comme l'original (mesuré : plus proche)
+        var judgeSettings = new MiniMax.MiniMaxSettings { UseFalsecards = true, EntriesNorth = settings?.EntriesNorth };
         var roughLines = result.LineItems.Select(line => (Line: line, Outcomes: LineComparison.Outcomes(line, result))).ToList();
         var candidates = LineComparison.Candidates(roughLines, l => l.Outcomes, perCriterion);
         var judged = candidates
-            .Select(c => (Line: c.Line, Outcomes: LineEvaluator.Outcomes(c.Line, result, settings)))
+            .Select(c => (Line: c.Line, Outcomes: LineEvaluator.Outcomes(c.Line, result, judgeSettings)))
             .ToList();
         return new SuitAnalysis(result, judged);
     }
