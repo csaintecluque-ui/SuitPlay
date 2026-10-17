@@ -26,6 +26,9 @@ public class Calculate
         /// </summary>
         public bool ApproximateWhenTooManyLines { get; init; } = true;
     }
+    /// <summary>Durées (en secondes) des étapes du dernier calcul de lignes, pour le diagnostic.</summary>
+    public static Dictionary<string, double> LastTimings { get; } = new();
+
     private static readonly ArrayEqualityComparer<Face> ArrayEqualityComparer = new();
     private static readonly FaceArrayComparer FaceArrayComparer = new();
     private static readonly JsonSerializerOptions JsonSerializerOptions  = new() { WriteIndented = false, IncludeFields = true };
@@ -79,6 +82,9 @@ public class Calculate
 
         List<LineItem> AssignLines()
         {
+            LastTimings.Clear();
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            void Mark(string step) { LastTimings[step] = timer.Elapsed.TotalSeconds; timer.Restart(); }
             var treeItems = bestPlay.Select(x => new
             {
                 Combination = x.Key,
@@ -89,7 +95,9 @@ public class Calculate
             
             if (calculateSettings.RemoveTranspositions)
                 RemoveTranspositions();
+            Mark("arbres");
             RemoveBadPlays();
+            Mark("mauvais coups");
 
             var lines2NdHigh = treeItems.SelectMany(x => x.Items).Where(x => x.Play.Count() > 1 && x.Play.Data[1] != Face.SmallCard).Select(x => x.Play).ToList();
             var lines2NdDummy = treeItems.SelectMany(x => x.Items).Where(x => x.Play.Count() == 1).Select(x => x.Play).ToList();
@@ -112,15 +120,21 @@ public class Calculate
                     };
                     return lineItem;
                 }).ToList();
+            Mark("lignes");
 
             CreateExtraLines(1);
+            Mark("détail 1");
             CreateExtraLines(3);
+            Mark("détail 3");
             CreateExtraLines(5);
+            Mark("détail 5");
             CreateExtraLines(7);
+            Mark("détail 7");
             if (calculateSettings.RemoveDuplicateLines)
                 RemoveDuplicateLines();
             lineItems = lineItems.OrderByDescending(x => x.LongestLine).ToList();
             AddStatistics();
+            Mark("statistiques");
             AddSuitPlayStatistics();
             Log.Information("End GetResult2");
 

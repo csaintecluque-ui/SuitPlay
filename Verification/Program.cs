@@ -121,7 +121,7 @@ if (coverage < 0.999)
 var originalMp = LineComparison.MatchpointBest(originalLines, l => l.Outcomes);
 var ourMp = LineComparison.MatchpointBest(LineComparison.Candidates(ourLines, l => l.Outcomes), l => l.Outcomes);
 var sameMp = ourMp.Any(o => originalMp.Any(s => Utils.IsSameLine(o.Line.Header, s.Key, cardsNS)));
-Console.WriteLine($"MP|| {name} ({result.LineItems.Count} lignes, {watch.Elapsed.TotalSeconds:0.0} s : moteur {timeEngine:0.0}, lignes {timeLines:0.0}, juge {timeJudge:0.0}) | {string.Join("<br>", originalMp.Select(s => s.Key))} | {string.Join("<br>", ourMp.Select(o => o.Line.Header))} | {(sameMp ? "oui" : "**non**")} |");
+Console.WriteLine($"MP|| {name} ({result.LineItems.Count} lignes, {watch.Elapsed.TotalSeconds:0.0} s : moteur {timeEngine:0.0}, lignes {timeLines:0.0} [{string.Join(", ", Calculate.LastTimings.Select(t => $"{t.Key} {t.Value:0.0}"))}], juge {timeJudge:0.0}) | {string.Join("<br>", originalMp.Select(s => s.Key))} | {string.Join("<br>", ourMp.Select(o => o.Line.Header))} | {(sameMp ? "oui" : "**non**")} |");
 
 // Contrôle du juge : il évalue les lignes de l'original, comparées aux résultats de l'original
 if (mode == "eval" && result.LineItems.Count > 0)
