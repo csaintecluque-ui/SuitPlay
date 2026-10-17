@@ -20,14 +20,19 @@ jobs:
       - name: Installer .NET MAUI
         run: dotnet workload install maui
 
+      - name: Ne garder que la version Windows
+        shell: bash
+        run: |
+          sed -i -E 's#<TargetFrameworks>net10.0-android;net10.0-ios</TargetFrameworks>#<TargetFrameworks>net10.0-windows10.0.19041.0</TargetFrameworks>#; /IsOSPlatform\(.windows.\)/d' SuitPlay/SuitPlay.csproj
+          grep -n "<TargetFrameworks>" SuitPlay/SuitPlay.csproj
+
       - name: Compiler SuitPlay.exe
         shell: bash
         run: |
           set -o pipefail
           dotnet build SuitPlay/SuitPlay.csproj -c Release \
             -f net10.0-windows10.0.19041.0 \
-            -p:TargetFrameworks=net10.0-windows10.0.19041.0 \
-            -p:RuntimeIdentifier=win-x64 \
+            -r win-x64 \
             -p:WindowsPackageType=None \
             -p:SelfContained=true \
             -p:WindowsAppSDKSelfContained=true \
