@@ -15,9 +15,9 @@ public partial class MainPage
         set
         {
             field = value;
-            North.BackgroundColor = Colors.Black;
-            South.BackgroundColor = Colors.Black;
-            field.BackgroundColor = Colors.Gray;
+            North.BackgroundColor = Colors.Transparent;
+            South.BackgroundColor = Colors.Transparent;
+            field.BackgroundColor = Color.FromArgb("#40512BD4");
         }
     }
 
@@ -154,18 +154,26 @@ public partial class MainPage
             return;
         }
 
-        var tricks = result.PossibleNrOfTricks.Where(x => x > 0).OrderByDescending(x => x).ToList();
+        var allTricks = bestPlay.SelectMany(x => x.Value).Select(x => x.Tricks).ToList();
+        guaranteedTricks = allTricks.Min();
+        var maxTricks = allTricks.Max();
+        var tricks = result.PossibleNrOfTricks.Where(x => x > guaranteedTricks).ToList();
+        if (guaranteedTricks > 0)
+            tricks.Add(guaranteedTricks);
+        tricks = tricks.Distinct().OrderByDescending(x => x).ToList();
 
         // Tableau des chances : une ligne par objectif
         ResultsGrid.Children.Clear();
         ResultsGrid.RowDefinitions.Clear();
         AddResultRow(0, "Objectif", "Chances", "Première carte", true);
         var row = 1;
+        AddResultRow(row++, $"{maxTricks + 1} levées ou plus", "impossible", "");
         foreach (var goal in tricks)
         {
-            var line = FrenchText.BestLineFor(result.LineItems, goal);
-            var probability = FrenchText.ProbabilityFor(line, goal);
-            AddResultRow(row++, $"Au moins {goal} levée{(goal > 1 ? "s" : "")}", $"{probability * 100:0.0} %", FirstCardText(line));
+            var line = BestLineFor(goal);
+            var probability = ProbabilityFor(line, goal);
+            var chances = goal <= guaranteedTricks ? "100 % (assuré)" : $"{probability * 100:0.0} %";
+            AddResultRow(row++, $"Au moins {goal} levée{(goal > 1 ? "s" : "")}", chances, FirstCardText(line));
         }
         var bestAverage = FrenchText.BestLineFor(result.LineItems, null);
         AddResultRow(row, "Maximum de levées", $"{bestAverage.Average.Value:0.00} en moyenne", FirstCardText(bestAverage));
@@ -185,6 +193,25 @@ public partial class MainPage
 
         ResultsPanel.IsVisible = true;
         ShowSelectedGoal();
+        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(150), async () =>
+        {
+            try { await MainScroll.ScrollToAsync(ResultsPanel, ScrollToPosition.Start, true); }
+            catch { /* défilement facultatif */ }
+        });
+    }
+
+    private int guaranteedTricks;
+
+    private LineItem BestLineFor(int? goal)
+    {
+        return goal == null || goal <= guaranteedTricks
+            ? FrenchText.BestLineFor(result.LineItems, null)
+            : FrenchText.BestLineFor(result.LineItems, goal);
+    }
+
+    private double ProbabilityFor(LineItem line, int goal)
+    {
+        return goal <= guaranteedTricks ? 1.0 : FrenchText.ProbabilityFor(line, goal);
     }
 
     private void AddResultRow(int row, string goal, string chances, string firstCard, bool header = false)
@@ -220,13 +247,15 @@ public partial class MainPage
             return;
 
         var goal = goals[GoalPicker.SelectedIndex];
-        var line = FrenchText.BestLineFor(result.LineItems, goal);
+        var line = BestLineFor(goal);
         if (line == null)
             return;
 
         GoalSummary.Text = goal == null
             ? $"Cette ligne rapporte en moyenne {line.Average.Value:0.00} levées."
-            : $"Cette ligne réussit dans {FrenchText.ProbabilityFor(line, goal.Value) * 100:0.0} % des cas.";
+            : goal.Value <= guaranteedTricks
+                ? $"{goal} levée{(goal > 1 ? "s" : "")} assurée{(goal > 1 ? "s" : "")} quelle que soit la répartition."
+                : $"Cette ligne réussit dans {ProbabilityFor(line, goal.Value) * 100:0.0} % des cas.";
         var sequence = line.LongestLineIncludingGenerated;
         LineDescription.Text = FrenchText.DescribeLine(sequence, result.North, result.South);
         LineSequence.Text = $"Séquence (Nord-Sud et adversaires, x = petite carte) : {FrenchText.SequenceToString(sequence)}";

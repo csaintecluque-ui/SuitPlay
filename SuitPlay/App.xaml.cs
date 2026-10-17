@@ -16,10 +16,11 @@ public partial class App : Application
         var window = new Window(new AppShell()) { Title = "SuitPlay — combinaisons de couleur" };
 
 #if WINDOWS
-        window.Width = 800;
-        window.Height = 920;
-        
         var displayInfo = DeviceDisplay.Current.MainDisplayInfo;
+        var screenHeight = displayInfo.Height / displayInfo.Density;
+        window.Width = 900;
+        window.Height = Math.Max(600, Math.Min(1100, screenHeight - 80));
+
         window.X = (displayInfo.Width / displayInfo.Density - window.Width) / 2;
         window.Y = (displayInfo.Height / displayInfo.Density - window.Height) / 2;
 #endif

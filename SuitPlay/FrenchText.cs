@@ -70,25 +70,34 @@ public static class FrenchText
         if (line == null || line.Count() == 0)
             return "Aucune ligne de jeu à afficher.";
 
-        var cardsNS = north.Concat(south).OrderDescending().ToList();
-        var topSequence = GetTopSequence(cardsNS);
-        var topIsMaster = topSequence.Contains(Face.Ace);
-
+        var played = new HashSet<Face>();
         var text = new StringBuilder();
         var number = 1;
         foreach (var trick in line.Chunk(4))
         {
-            var sentence = DescribeTrick(trick, north, south, topSequence, topIsMaster);
+            var sentence = DescribeTrick(trick, north, south, played);
             if (sentence == null)
                 break;
             text.AppendLine($"{number}. {sentence}");
             number++;
+            foreach (var card in trick.Where(c => c != Face.SmallCard && c != Face.Dummy))
+                played.Add(card);
         }
 
         return text.ToString().TrimEnd();
     }
 
-    private static string DescribeTrick(Face[] trick, Face[] north, Face[] south, List<Face> topSequence, bool topIsMaster)
+    private static readonly Face[] AllFaces =
+        [Face.Two, Face.Three, Face.Four, Face.Five, Face.Six, Face.Seven, Face.Eight, Face.Nine, Face.Ten, Face.Jack, Face.Queen, Face.King, Face.Ace];
+
+    /// <summary>Cartes adverses plus hautes que <paramref name="card"/> et pas encore jouées.</summary>
+    private static List<Face> MissingAbove(Face card, Face[] north, Face[] south, HashSet<Face> played)
+    {
+        return AllFaces.Where(f => f > card && !north.Contains(f) && !south.Contains(f) && !played.Contains(f))
+            .OrderDescending().ToList();
+    }
+
+    private static string DescribeTrick(Face[] trick, Face[] north, Face[] south, HashSet<Face> played)
     {
         if (trick.Length == 0)
             return null;
@@ -99,6 +108,7 @@ public static class FrenchText
 
         var leadHand = north.Contains(lead) ? "Nord" : "Sud";
         var otherHand = leadHand == "Nord" ? "Sud" : "Nord";
+        var otherCards = leadHand == "Nord" ? south : north;
         var secondHand = leadHand == "Nord" ? "Est" : "Ouest";
 
         if (trick.Length < 3)
@@ -110,14 +120,14 @@ public static class FrenchText
         if (partner == Face.Dummy)
             return $"Jouez {CardName(lead)} de {leadHand} ({otherHand} n'a plus de carte dans la couleur).";
 
-        var leadIsMaster = topIsMaster && topSequence.Contains(lead);
-        var partnerIsMaster = topIsMaster && topSequence.Contains(partner);
+        var leadIsMaster = MissingAbove(lead, north, south, played).Count == 0;
+        var partnerIsMaster = MissingAbove(partner, north, south, played).Count == 0;
 
         if (second != Face.SmallCard && second != Face.Dummy && !leadIsMaster)
             return $"Jouez {CardName(lead)} de {leadHand} vers {otherHand} ; si {secondHand} fournit {CardName(second)}, mettez {CardName(partner)}.";
 
         if (leadIsMaster)
-            return $"Tirez {CardName(lead)} de {leadHand} (fournissez {CardName(partner)} de {otherHand}).";
+            return $"Tirez {CardName(lead)} de {leadHand}, maître (fournissez {CardName(partner)} de {otherHand}).";
 
         if (partnerIsMaster)
             return $"Jouez {CardName(lead)} de {leadHand} vers {otherHand} et prenez avec {CardName(partner)}.";
@@ -125,19 +135,12 @@ public static class FrenchText
         if (lead < partner)
             return $"Jouez {CardName(lead)} de {leadHand} vers {otherHand} ; si {secondHand} fournit petit, mettez {CardName(partner)}.";
 
-        return $"Avancez {CardName(lead)} de {leadHand} ; si {secondHand} fournit petit, laissez courir (fournissez {CardName(partner)} de {otherHand}).";
-    }
+        // La carte d'entame est plus haute que celle fournie par le partenaire
+        var partnerCanOvertake = otherCards.Any(c => c > lead && !played.Contains(c));
+        if (partnerCanOvertake)
+            return $"Avancez {CardName(lead)} de {leadHand} ; si {secondHand} fournit petit, laissez courir (fournissez {CardName(partner)} de {otherHand}).";
 
-    /// <summary>Plus haute séquence de cartes consécutives détenue par la ligne Nord-Sud.</summary>
-    private static List<Face> GetTopSequence(List<Face> cardsNSDescending)
-    {
-        var result = new List<Face>();
-        foreach (var card in cardsNSDescending)
-        {
-            if (result.Count > 0 && (int)result[^1] - (int)card != 1)
-                break;
-            result.Add(card);
-        }
-        return result;
+        var target = MissingAbove(lead, north, south, played).First();
+        return $"Avancez {CardName(lead)} de {leadHand} pour chasser {CardName(target)} (fournissez {CardName(partner)} de {otherHand}).";
     }
 }
