@@ -59,6 +59,8 @@ foreach (var falsecards in new[] { false, true })
             continue;
         }
         combos++;
+        try
+        {
 
         // Probabilité de chaque main d'Est, telle que notre moteur la calcule
         var probabilities = new Dictionary<string, double>();
@@ -70,12 +72,24 @@ foreach (var falsecards in new[] { false, true })
 
         // Résultats de l'original
         var etalon = JsonSerializer.Deserialize<(Dictionary<string, List<int>> lines, List<string> combinations)>(File.ReadAllText(file), jsonOptions);
-        var originalLines = etalon.lines.Select(line => (Key: line.Key, Outcomes: etalon.combinations
-                .Select((c, i) => (c, i))
-                .Where(x => probabilities.ContainsKey(x.c))
-                .ToDictionary(x => x.c, x => (Probability: probabilities[x.c], Tricks: line.Value[x.i]))))
-            .ToList();
-        var coverage = etalon.combinations.Where(probabilities.ContainsKey).Sum(c => probabilities[c]);
+        var originalLines = new List<(string Key, Dictionary<string, (double Probability, int Tricks)> Outcomes)>();
+        var duplicates = 0;
+        foreach (var line in etalon.lines)
+        {
+            var outcomes = new Dictionary<string, (double Probability, int Tricks)>();
+            for (var i = 0; i < etalon.combinations.Count && i < line.Value.Count; i++)
+            {
+                var c = etalon.combinations[i];
+                if (!probabilities.TryGetValue(c, out var p))
+                    continue;
+                if (!outcomes.TryAdd(c, (p, line.Value[i])))
+                    duplicates++;
+            }
+            originalLines.Add((line.Key, outcomes));
+        }
+        var coverage = etalon.combinations.Distinct().Where(probabilities.ContainsKey).Sum(c => probabilities[c]);
+        if (duplicates > 0)
+            report.AppendLine($"| {name} | doublons | {duplicates} | | entrées en double dans le fichier de référence |");
 
         // Nos résultats
         var ourLines = result.LineItems.Select(line => (Line: line, Outcomes: LineComparison.Outcomes(line, result))).ToList();
@@ -108,6 +122,11 @@ foreach (var falsecards in new[] { false, true })
         if (sameMp) mpSame++;
         Console.WriteLine($"   {result.LineItems.Count} lignes, {watch.Elapsed.TotalSeconds:0.0} s");
         mpLines.AppendLine($"| {name} ({result.LineItems.Count} lignes, {watch.Elapsed.TotalSeconds:0.0} s) | {string.Join("<br>", originalMp.Select(s => s.Key))} | {string.Join("<br>", ourMp.Select(o => o.Line.Header))} | {(sameMp ? "oui" : "**non**")} |");
+        }
+        catch (Exception ex)
+        {
+            report.AppendLine($"| {name} | erreur d'analyse | | | {ex.GetType().Name} : {ex.Message.Replace("|", "/")} |");
+        }
     }
 
     report.AppendLine();
