@@ -72,6 +72,13 @@ foreach (var line in etalon.lines)
 var coverage = etalon.combinations.Distinct().Where(probabilities.ContainsKey).Sum(c => probabilities[c]);
 if (duplicates > 0)
     Row($"| {name} | doublons | {duplicates} | | entrées en double dans le fichier de référence |");
+if (coverage < 0.9)
+{
+    // Le fichier de référence ne couvre qu'une partie des répartitions : comparaison impossible
+    Row($"| {name} | référence incomplète | {Pct(coverage)} % des répartitions | | non comparé |");
+    Console.WriteLine($"STAT|0|0|0");
+    return;
+}
 
 // Nos résultats
 var ourLines = result.LineItems.Select(line => (Line: line, Outcomes: LineComparison.Outcomes(line, result, pessimistic))).ToList();
