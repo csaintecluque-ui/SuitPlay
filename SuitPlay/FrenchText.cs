@@ -78,6 +78,7 @@ public static class FrenchText
             var sentence = DescribeTrick(trick, north, south, played);
             if (sentence == null)
                 break;
+            sentence += FourthHandNote(trick, north);
             text.AppendLine($"{number}. {sentence}");
             number++;
             foreach (var card in trick.Where(c => c != Face.SmallCard && c != Face.Dummy))
@@ -85,6 +86,26 @@ public static class FrenchText
         }
 
         return text.ToString().TrimEnd();
+    }
+
+    /// <summary>« de l'As », « du Roi », « de la Dame »…</summary>
+    private static string OfCard(Face face) => face switch
+    {
+        Face.Ace => "de l'As",
+        Face.Queen => "de la Dame",
+        _ => "du " + CardName(face)[3..]
+    };
+
+    /// <summary>Précise ce que fait la 4e main quand elle ne fournit pas une petite carte.</summary>
+    private static string FourthHandNote(Face[] trick, Face[] north)
+    {
+        if (trick.Length < 4 || trick[3] == Face.SmallCard || trick[3] == Face.Dummy)
+            return "";
+        var fourthHand = north.Contains(trick[0]) ? "Ouest" : "Est";
+        var wins = trick[3] > trick[0] && trick[3] > trick[2] && (trick[1] == Face.SmallCard || trick[1] == Face.Dummy || trick[3] > trick[1]);
+        return wins
+            ? $" {fourthHand} prend avec {CardName(trick[3])}."
+            : $" {fourthHand} fournit {CardName(trick[3])}.";
     }
 
     private static readonly Face[] AllFaces =
@@ -212,7 +233,7 @@ public static class FrenchText
             var condition = card == Face.Dummy
                 ? $"Si {who} ne fournit pas à la levée {trickNumber + 1}"
                 : card == Face.SmallCard
-                    ? $"Si {who} fournit petit à la levée {trickNumber + 1}"
+                    ? $"Si {who} fournit petit à la levée {trickNumber + 1} au lieu {OfCard(main[index])}"
                     : $"Si {who} fournit {CardName(card)} à la levée {trickNumber + 1}";
 
             var played = new HashSet<Face>(play.Take(trickNumber * 4).Where(c => c != Face.SmallCard && c != Face.Dummy));
