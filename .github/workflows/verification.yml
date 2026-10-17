@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          for cfg in false-eval; do
+          for cfg in false-eval true-eval; do
             fc=${cfg%-*}; mode=${cfg#*-}
             for f in Calculator/etalons-suitplay/*.json; do
               n=$(basename "$f" .json)
@@ -64,8 +64,9 @@ jobs:
                  f"Généré le {datetime.datetime.utcnow():%Y-%m-%d %H:%M} UTC. Pourcentages = meilleures chances d'atteindre l'objectif.", "", "## Résumé", ""]
           sections = []
           labels = {"false-max": "ancien calcul (sans juge)",
-                    "false-eval": "nouveau juge : chaque ligne rejouée contre toutes les défenses"}
-          for fc in ("false-eval",):
+                    "false-eval": "juge, sans fausses cartes",
+                    "true-eval": "juge, fausses cartes autorisées pour la défense"}
+          for fc in ("false-eval", "true-eval"):
               files = sorted(glob.glob(f"out/{fc}-*.txt"))
               rows, mps, chks, matches, gaps, mp_same, done = [], [], [], 0, 0.0, 0, 0
               for f in files:

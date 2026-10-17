@@ -10,6 +10,7 @@ using Calculator.Models;
 var file = args[0];
 var falsecards = args.Length > 1 && bool.Parse(args[1]);
 var mode = args.Length > 2 ? args[2] : "max";
+var judgeSettings = new MiniMax.MiniMaxSettings { UseFalsecards = falsecards };
 var pessimistic = mode == "min";
 var jsonOptions = new JsonSerializerOptions { IncludeFields = true };
 
@@ -27,7 +28,8 @@ var watch = System.Diagnostics.Stopwatch.StartNew();
 Result2 result;
 try
 {
-    var bestPlay = Calculate.CalculateBestPlay(north, south, new MiniMax.MiniMaxSettings { UseFalsecards = falsecards });
+    // En mode « juge », les lignes sont générées sans fausses cartes ; le juge, lui, les autorise ou non
+    var bestPlay = Calculate.CalculateBestPlay(north, south, new MiniMax.MiniMaxSettings { UseFalsecards = falsecards && mode != "eval" });
     result = Calculate.GetResult2(bestPlay, north, south,
         new Calculate.CalculateSettings { EtalonsDirectory = etalonsDir, MaxLines = 10000 });
 }
@@ -74,7 +76,7 @@ if (mode == "eval")
 {
     // Le « juge » rejoue chaque ligne candidate contre toutes les défenses
     var candidates = LineComparison.Candidates(ourLines, l => l.Outcomes, 40);
-    ourLines = candidates.Select(c => (c.Line, LineEvaluator.Outcomes(c.Line, result))).ToList();
+    ourLines = candidates.Select(c => (c.Line, LineEvaluator.Outcomes(c.Line, result, judgeSettings))).ToList();
 }
 
 var maxTricks = Math.Max(
@@ -116,7 +118,7 @@ if (mode == "eval" && result.LineItems.Count > 0)
         var sequences = key.Split(';', StringSplitOptions.RemoveEmptyEntries).Select(x => new Cards(x)).ToList();
         if (sequences.Count == 0) continue;
         var pseudoLine = new LineItem { Line = sequences, Items2 = template.Items2 };
-        var judged = LineEvaluator.Outcomes(pseudoLine, result);
+        var judged = LineEvaluator.Outcomes(pseudoLine, result, judgeSettings);
         // Regroupe par main d'Est en petites cartes (notation de l'original)
         var judgedByCombo = judged
             .GroupBy(j => Utils.CardsToString(Utils.StringToCardArray(j.Key).ConvertToSmallCards(cardsNS)))

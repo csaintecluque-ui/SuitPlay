@@ -18,7 +18,7 @@ public static class LineEvaluator
     /// (la même carte dans toutes les répartitions qu'il ne peut pas distinguer), comme dans l'original.
     /// false : il termine en voyant les cartes (plus rapide, mais trop optimiste).
     /// </param>
-    public static Dictionary<string, (double Probability, int Tricks)> Outcomes(LineItem line, Result2 result, MiniMax.MiniMaxSettings settings = null, bool singleDummy = true)
+    public static Dictionary<string, (double Probability, int Tricks)> Outcomes(LineItem line, Result2 result, MiniMax.MiniMaxSettings settings = null, bool singleDummy = false)
     {
         settings ??= new MiniMax.MiniMaxSettings();
         if (!singleDummy)
