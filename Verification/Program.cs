@@ -9,7 +9,8 @@ using Calculator.Models;
 
 var file = args[0];
 var falsecards = args.Length > 1 && bool.Parse(args[1]);
-var pessimistic = args.Length > 2 && args[2] == "min";
+var mode = args.Length > 2 ? args[2] : "max";
+var pessimistic = mode == "min";
 var jsonOptions = new JsonSerializerOptions { IncludeFields = true };
 
 string Pct(double x) => (x * 100).ToString("0.0", CultureInfo.InvariantCulture);
@@ -69,6 +70,12 @@ if (duplicates > 0)
 
 // Nos résultats
 var ourLines = result.LineItems.Select(line => (Line: line, Outcomes: LineComparison.Outcomes(line, result, pessimistic))).ToList();
+if (mode == "eval")
+{
+    // Le « juge » rejoue chaque ligne candidate contre toutes les défenses
+    var candidates = LineComparison.Candidates(ourLines, l => l.Outcomes, 40);
+    ourLines = candidates.Select(c => (c.Line, LineEvaluator.Outcomes(c.Line, result))).ToList();
+}
 
 var maxTricks = Math.Max(
     originalLines.Max(l => l.Outcomes.Values.Max(o => o.Tricks)),
