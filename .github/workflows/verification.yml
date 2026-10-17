@@ -16,7 +16,7 @@ permissions:
 jobs:
   verification:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
@@ -25,17 +25,64 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Lancer la comparaison
+      - name: Compiler le banc de comparaison
         shell: bash
         run: |
           set -o pipefail
-          dotnet run --project Verification/Verification.csproj -c Release -- Calculator/etalons-suitplay "$PWD/rapport.md" 2>&1 | tee run.log || {
-            grep -E ": error |Exception" run.log | sed -E 's/^.*: error /error /' | sort -u | head -10 | sed 's/^/::error::/'
+          dotnet build Verification/Verification.csproj -c Release -o bench 2>&1 | tee build.log || {
+            grep -E ": error " build.log | sed -E 's/^.*: error /error /' | sort -u | head -10 | sed 's/^/::error::/'
             exit 1
           }
+
+      - name: Comparer chaque combinaison (4 min max par combinaison)
+        timeout-minutes: 40
+        shell: bash
+        run: |
+          mkdir -p out
+          for fc in false true; do
+            for f in Calculator/etalons-suitplay/*.json; do
+              n=$(basename "$f" .json)
+              echo "== $n (fausses cartes $fc)"
+              if timeout 240 dotnet bench/Verification.dll "$f" "$fc" > "out/$fc-$n.txt" 2> "out/$fc-$n.err"; then
+                :
+              else
+                code=$?
+                if [ $code -eq 124 ]; then echo "ROW|| $n | trop long | | | plus de 4 minutes, non comparé |" > "out/$fc-$n.txt";
+                else echo "ROW|| $n | erreur | | | $(head -c 200 out/$fc-$n.err | tr '\n|' '  ') |" > "out/$fc-$n.txt"; fi
+              fi
+            done
+          done
+
+      - name: Assembler le rapport
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob, os, datetime
+          out = ["# Notre moteur comparé au SuitPlay original", "",
+                 f"Généré le {datetime.datetime.utcnow():%Y-%m-%d %H:%M} UTC. Pourcentages = meilleures chances d'atteindre l'objectif.", "", "## Résumé", ""]
+          sections = []
+          for fc in ("false", "true"):
+              files = sorted(glob.glob(f"out/{fc}-*.txt"))
+              rows, mps, matches, gaps, mp_same, done = [], [], 0, 0.0, 0, 0
+              for f in files:
+                  for line in open(f, encoding="utf-8"):
+                      line = line.rstrip("\n")
+                      if line.startswith("ROW|"): rows.append(line[4:])
+                      elif line.startswith("MP|"): mps.append(line[3:])
+                      elif line.startswith("STAT|"):
+                          _, m, g, s = line.split("|"); matches += int(m); gaps += float(g); mp_same += int(s); done += 1
+              label = "oui" if fc == "true" else "non"
+              out.append(f"- Fausses cartes {label} : {done}/{len(files)} combinaisons comparées, {matches} objectifs identiques, écart cumulé {gaps*100:.1f} points, meilleure ligne en matchpoints identique {mp_same}/{done}")
+              sec = ["", f"## Fausses cartes des adversaires : {label}", "", "| Combinaison | Objectif | Original | Nous | Écart |", "|---|---|---|---|---|"] + rows
+              sec += ["", "### Meilleure ligne en matchpoints", "", "| Combinaison | Original | Nous | Identique |", "|---|---|---|---|"] + mps
+              sections += sec
+          open("rapport.md", "w", encoding="utf-8").write("\n".join(out + sections) + "\n")
+          PY
           cat rapport.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publier le rapport sur la branche rapports
+        if: always()
         shell: bash
         run: |
           mkdir publish && cp rapport.md publish/
