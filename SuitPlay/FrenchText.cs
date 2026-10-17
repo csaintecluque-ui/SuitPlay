@@ -141,6 +141,76 @@ public static class FrenchText
             return $"Avancez {CardName(lead)} de {leadHand} ; si {secondHand} fournit petit, laissez courir (fournissez {CardName(partner)} de {otherHand}).";
 
         var target = MissingAbove(lead, north, south, played).First();
+        if (lead < Face.Ten)
+            return $"Rejouez {CardName(lead)} de {leadHand} et concédez une levée pour affranchir la couleur (fournissez {CardName(partner)} de {otherHand}).";
         return $"Avancez {CardName(lead)} de {leadHand} pour chasser {CardName(target)} (fournissez {CardName(partner)} de {otherHand}).";
+    }
+
+    /// <summary>
+    /// Variantes de la ligne : que faire quand un adversaire ne fournit pas la petite carte attendue
+    /// (il fournit un honneur, ou n'a plus de carte dans la couleur).
+    /// </summary>
+    public static List<string> DescribeVariants(LineItem line, Face[] north, Face[] south, int maxVariants = 8)
+    {
+        var variants = new List<string>();
+        if (line == null)
+            return variants;
+        var main = line.LongestLineIncludingGenerated;
+        var others = line.Line.Concat(line.GeneratedLines)
+            .Where(x => x != null && x != main)
+            .Distinct()
+            .OrderBy(x => x.Count())
+            .ToList();
+
+        foreach (var other in others)
+        {
+            // Première carte où la variante s'écarte de la ligne principale
+            var index = 0;
+            while (index < other.Count() && index < main.Count() && other[index] == main[index])
+                index++;
+            if (index >= other.Count())
+                continue;
+
+            var trickNumber = index / 4;
+            var position = index % 4;
+            var card = other[index];
+            if (position != 1 && position != 3)
+                continue; // seules les cartes des adversaires créent une variante
+
+            var tricks = other.Chunk(4).ToList();
+            var trick = tricks[trickNumber];
+            var leadFromNorth = north.Contains(trick[0]);
+            var who = position == 1 ? (leadFromNorth ? "Est" : "Ouest") : (leadFromNorth ? "Ouest" : "Est");
+            var condition = card == Face.Dummy
+                ? $"Si {who} ne fournit pas à la levée {trickNumber + 1}"
+                : card == Face.SmallCard
+                    ? $"Si {who} fournit petit à la levée {trickNumber + 1}"
+                    : $"Si {who} fournit {CardName(card)} à la levée {trickNumber + 1}";
+
+            var played = new HashSet<Face>(other.Take(trickNumber * 4).Where(c => c != Face.SmallCard && c != Face.Dummy));
+            var steps = new List<string>();
+            if (position == 1 && trick.Length >= 3 && trick[2] != Face.Dummy)
+                steps.Add($"mettez {CardName(trick[2])} de {(leadFromNorth ? "Sud" : "Nord")}");
+            foreach (var c in trick.Where(c => c != Face.SmallCard && c != Face.Dummy))
+                played.Add(c);
+            for (var t = trickNumber + 1; t < tricks.Count; t++)
+            {
+                var sentence = DescribeTrick(tricks[t], north, south, played);
+                if (sentence == null)
+                    break;
+                steps.Add(char.ToLowerInvariant(sentence[0]) + sentence[1..].TrimEnd('.'));
+                foreach (var c in tricks[t].Where(c => c != Face.SmallCard && c != Face.Dummy))
+                    played.Add(c);
+            }
+            if (steps.Count == 0)
+                steps.Add("la suite ne change pas");
+
+            var text = $"{condition} : {string.Join(", puis ", steps)}.";
+            if (!variants.Contains(text))
+                variants.Add(text);
+            if (variants.Count >= maxVariants)
+                break;
+        }
+        return variants;
     }
 }

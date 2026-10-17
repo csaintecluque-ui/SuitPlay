@@ -232,6 +232,9 @@ select.goal {
 .summary { font-weight: 700; margin: 4px 0 8px; }
 ol.steps { margin: 0 0 8px; padding-left: 1.3em; }
 ol.steps li { margin-bottom: 6px; }
+h3.sub { font-size: .95rem; margin: 12px 0 6px; }
+ul.variants { margin: 0 0 8px; padding-left: 1.2em; }
+ul.variants li { margin-bottom: 6px; }
 .seq { color: var(--muted); font-size: .85rem; margin: 6px 0; }
 .note { color: var(--muted); font-size: .8rem; margin: 6px 0 0; }
 

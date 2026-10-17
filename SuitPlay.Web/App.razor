@@ -118,6 +118,17 @@
                         <li>@step</li>
                     }
                 </ol>
+                var variants = FrenchText.DescribeVariants(selectedLine, result.North, result.South);
+                @if (variants.Count > 0)
+                {
+                    <h3 class="sub">Si la défense ne fournit pas petit</h3>
+                    <ul class="variants">
+                        @foreach (var variant in variants)
+                        {
+                            <li>@variant</li>
+                        }
+                    </ul>
+                }
                 <p class="seq">Séquence (x = petite carte) : @FrenchText.SequenceToString(selectedLine.LongestLineIncludingGenerated)</p>
                 <p class="note">La ligne décrite suppose que les adversaires fournissent petit et que vous pouvez reprendre la main dans la bonne main quand il le faut.</p>
 

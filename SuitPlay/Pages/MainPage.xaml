@@ -67,6 +67,8 @@
                     </HorizontalStackLayout>
                     <Label x:Name="GoalSummary" FontAttributes="Bold" LineBreakMode="WordWrap"/>
                     <Label x:Name="LineDescription" LineBreakMode="WordWrap"/>
+                    <Label x:Name="VariantsTitle" Text="Si la défense ne fournit pas petit" FontAttributes="Bold" IsVisible="False" Margin="0,6,0,0"/>
+                    <Label x:Name="VariantsText" LineBreakMode="WordWrap" IsVisible="False"/>
                     <Label x:Name="LineSequence" FontSize="12" TextColor="#ACACAC" LineBreakMode="WordWrap"/>
                     <Label Text="La ligne décrite suppose que les adversaires fournissent petit ; le détail de chaque répartition est dans « Répartitions »."
                            FontSize="11" TextColor="#ACACAC" LineBreakMode="WordWrap"/>
