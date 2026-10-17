@@ -226,14 +226,16 @@ public class Calculate
             {
                 var extraLines = new List<LineItem>();
                 var linesToRemove = new List<LineItem>();
+                var overflow = false;
+                bool OverBudget(int pending) => lineItems.Count + extraLines.Count + pending > calculateSettings.MaxLines;
                 foreach (var lineItem in lineItems)
                 {
                     var play = new Cards(lineItem.Line.MaxBy(x => x.Count()).Take(shortestCount).ToList());
                     if (truncated)
                         break;
-                    if (TryCreateExtraLinesForPlay(play, lineItem, out var lineItemsForPlay, false))
+                    var created = TryCreateExtraLinesForPlay(play, lineItem, out var lineItemsForPlay, false);
+                    if (overflow || (created && OverBudget(lineItemsForPlay.Count)))
                     {
-                        if (lineItems.Count + extraLines.Count + lineItemsForPlay.Count > calculateSettings.MaxLines)
                         {
                             if (!calculateSettings.ApproximateWhenTooManyLines)
                                 throw new MaxLinesException();
@@ -242,8 +244,9 @@ public class Calculate
                             truncated = true;
                             break;
                         }
-                        extraLines.AddRange(lineItemsForPlay);
                     }
+                    if (created)
+                        extraLines.AddRange(lineItemsForPlay);
                 }
                 lineItems.Capacity = lineItems.Count +  extraLines.Count;
                 lineItems.AddRange(extraLines);
@@ -282,6 +285,12 @@ public class Calculate
                                     continue;
                                 extraLinesForCard.AddRange(newLineItems2);
                                 linesToRemove.Add(extraLine);
+                                // Arrêt dès que la limite est atteinte (sinon la génération peut exploser)
+                                if (OverBudget(extraLinesForPlay.Count + extraLinesForCard.Count))
+                                {
+                                    overflow = true;
+                                    return false;
+                                }
                             }
                             extraLinesForPlay.AddRange(extraLinesForCard);
                         }
