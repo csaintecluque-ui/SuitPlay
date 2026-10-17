@@ -26,14 +26,10 @@
                 Spacing="12">
 
                 <!-- En-tête -->
-                <HorizontalStackLayout Spacing="12">
-                    <Image Source="logo_csc.png" WidthRequest="40" HeightRequest="40"
-                           SemanticProperties.Description="Logo Anamnesis CSC"/>
-                    <VerticalStackLayout VerticalOptions="Center">
-                        <Label Text="SuitPlay" FontSize="20" FontAttributes="Bold"/>
-                        <Label Text="Meilleur maniement d'une couleur au bridge" FontSize="12" TextColor="#ACACAC"/>
-                    </VerticalStackLayout>
-                </HorizontalStackLayout>
+                <VerticalStackLayout>
+                    <Label Text="SuitPlay" FontSize="20" FontAttributes="Bold"/>
+                    <Label Text="Meilleur maniement d'une couleur au bridge" FontSize="12" TextColor="#ACACAC"/>
+                </VerticalStackLayout>
 
                 <Label Text="Touchez une main (Nord ou Sud) pour la sélectionner, puis touchez les cartes à lui donner. Touchez une carte d'une main pour la remettre dans le paquet."
                        FontSize="12" TextColor="#ACACAC" LineBreakMode="WordWrap"/>
