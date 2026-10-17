@@ -39,16 +39,17 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          for fc in false true; do
+          for cfg in false-max false-min true-min; do
+            fc=${cfg%-*}; mode=${cfg#*-}
             for f in Calculator/etalons-suitplay/*.json; do
               n=$(basename "$f" .json)
-              echo "== $n (fausses cartes $fc)"
-              if timeout 240 dotnet bench/Verification.dll "$f" "$fc" > "out/$fc-$n.txt" 2> "out/$fc-$n.err"; then
+              echo "== $n ($cfg)"
+              if timeout 240 dotnet bench/Verification.dll "$f" "$fc" "$mode" > "out/$cfg-$n.txt" 2> "out/$cfg-$n.err"; then
                 :
               else
                 code=$?
-                if [ $code -eq 124 ]; then echo "ROW|| $n | trop long | | | plus de 4 minutes, non comparé |" > "out/$fc-$n.txt";
-                else echo "ROW|| $n | erreur | | | $(head -c 200 out/$fc-$n.err | tr '\n|' '  ') |" > "out/$fc-$n.txt"; fi
+                if [ $code -eq 124 ]; then echo "ROW|| $n | trop long | | | plus de 4 minutes, non comparé |" > "out/$cfg-$n.txt";
+                else echo "ROW|| $n | erreur | | | $(head -c 200 out/$cfg-$n.err | tr '\n|' '  ') |" > "out/$cfg-$n.txt"; fi
               fi
             done
           done
@@ -62,7 +63,10 @@ jobs:
           out = ["# Notre moteur comparé au SuitPlay original", "",
                  f"Généré le {datetime.datetime.utcnow():%Y-%m-%d %H:%M} UTC. Pourcentages = meilleures chances d'atteindre l'objectif.", "", "## Résumé", ""]
           sections = []
-          for fc in ("false", "true"):
+          labels = {"false-max": "fausses cartes non, résultat le plus favorable (comme l'appli aujourd'hui)",
+                    "false-min": "fausses cartes non, la défense choisit le déroulement",
+                    "true-min": "fausses cartes oui, la défense choisit le déroulement"}
+          for fc in ("false-max", "false-min", "true-min"):
               files = sorted(glob.glob(f"out/{fc}-*.txt"))
               rows, mps, matches, gaps, mp_same, done = [], [], 0, 0.0, 0, 0
               for f in files:
@@ -72,9 +76,9 @@ jobs:
                       elif line.startswith("MP|"): mps.append(line[3:])
                       elif line.startswith("STAT|"):
                           _, m, g, s = line.split("|"); matches += int(m); gaps += float(g); mp_same += int(s); done += 1
-              label = "oui" if fc == "true" else "non"
-              out.append(f"- Fausses cartes {label} : {done}/{len(files)} combinaisons comparées, {matches} objectifs identiques, écart cumulé {gaps*100:.1f} points, meilleure ligne en matchpoints identique {mp_same}/{done}")
-              sec = ["", f"## Fausses cartes des adversaires : {label}", "", "| Combinaison | Objectif | Original | Nous | Écart |", "|---|---|---|---|---|"] + rows
+              label = labels[fc]
+              out.append(f"- {label} : {done}/{len(files)} combinaisons comparées, {matches} objectifs identiques, écart cumulé {gaps*100:.1f} points, meilleure ligne en matchpoints identique {mp_same}/{done}")
+              sec = ["", f"## {label}", "", "| Combinaison | Objectif | Original | Nous | Écart |", "|---|---|---|---|---|"] + rows
               sec += ["", "### Meilleure ligne en matchpoints", "", "| Combinaison | Original | Nous | Identique |", "|---|---|---|---|"] + mps
               sections += sec
           open("rapport.md", "w", encoding="utf-8").write("\n".join(out + sections) + "\n")

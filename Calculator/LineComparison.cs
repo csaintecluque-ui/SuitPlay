@@ -10,7 +10,11 @@ namespace Calculator;
 public static class LineComparison
 {
     /// <summary>Résultat d'une ligne pour chaque répartition adverse (clé = main d'Est en petites cartes).</summary>
-    public static Dictionary<string, (double Probability, int Tricks)> Outcomes(LineItem line, Result2 result)
+    /// <param name="pessimistic">
+    /// Quand plusieurs déroulements restent possibles pour une même répartition (choix de la défense),
+    /// true retient le moins bon pour le déclarant (la défense choisit), false le meilleur.
+    /// </param>
+    public static Dictionary<string, (double Probability, int Tricks)> Outcomes(LineItem line, Result2 result, bool pessimistic = false)
     {
         var cardsNS = result.North.Concat(result.South).OrderDescending().ToArray();
         var probabilities = new Dictionary<string, double>();
@@ -28,7 +32,7 @@ public static class LineComparison
             var key = Utils.CardsToString(item.Combination.ConvertToSmallCards(cardsNS));
             if (!probabilities.TryGetValue(key, out var probability))
                 continue;
-            var tricks = item.Tricks.Max();
+            var tricks = pessimistic ? item.Tricks.Min() : item.Tricks.Max();
             // Plusieurs combinaisons peuvent donner la même clé : on garde le résultat le plus prudent
             outcomes[key] = outcomes.TryGetValue(key, out var existing)
                 ? (probability, Math.Min(existing.Item2, tricks))

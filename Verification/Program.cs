@@ -9,6 +9,7 @@ using Calculator.Models;
 
 var file = args[0];
 var falsecards = args.Length > 1 && bool.Parse(args[1]);
+var pessimistic = args.Length > 2 && args[2] == "min";
 var jsonOptions = new JsonSerializerOptions { IncludeFields = true };
 
 string Pct(double x) => (x * 100).ToString("0.0", CultureInfo.InvariantCulture);
@@ -67,7 +68,7 @@ if (duplicates > 0)
     Row($"| {name} | doublons | {duplicates} | | entrées en double dans le fichier de référence |");
 
 // Nos résultats
-var ourLines = result.LineItems.Select(line => (Line: line, Outcomes: LineComparison.Outcomes(line, result))).ToList();
+var ourLines = result.LineItems.Select(line => (Line: line, Outcomes: LineComparison.Outcomes(line, result, pessimistic))).ToList();
 
 var maxTricks = Math.Max(
     originalLines.Max(l => l.Outcomes.Values.Max(o => o.Tricks)),
