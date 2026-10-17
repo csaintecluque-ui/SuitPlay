@@ -93,6 +93,18 @@ for (var goal = maxTricks; goal >= 1; goal--)
     var same = Math.Abs(gap) < 0.0005;
     if (same) matches++;
     Row($"| {name} | ≥ {goal} | {Pct(original)} % | {Pct(ours)} % | {(same ? "=" : (gap > 0 ? "+" : "") + Pct(gap))} |");
+    if (!same && mode == "eval")
+    {
+        // Détail de notre meilleure ligne, dans la notation de l'original (mains d'Est)
+        var best = ourLines.OrderByDescending(l => LineComparison.ProbabilityAtLeast(l.Outcomes, goal)).First();
+        var byCombo = best.Outcomes
+            .GroupBy(o => Utils.CardsToString(Utils.StringToCardArray(o.Key).ConvertToSmallCards(cardsNS)))
+            .ToDictionary(g => g.Key, g => string.Join("/", g.Select(x => x.Value.Tricks).Distinct()));
+        var vector = string.Join(" ", etalon.combinations.Select(c => $"{(c == "" ? "—" : c)}:{byCombo.GetValueOrDefault(c, "?")}"));
+        var originalBest = originalLines.OrderByDescending(l => LineComparison.ProbabilityAtLeast(l.Outcomes, goal)).First();
+        var originalVector = string.Join(" ", etalon.combinations.Select(c => $"{(c == "" ? "—" : c)}:{(originalBest.Outcomes.TryGetValue(c, out var o) ? o.Tricks : -1)}"));
+        Row($"| {name} | détail ≥ {goal} | {originalBest.Key}<br>{originalVector} | {best.Line.Header}<br>{vector} | |");
+    }
 }
 var originalAverage = originalLines.Max(l => LineComparison.Average(l.Outcomes));
 var ourAverage = ourLines.Max(l => LineComparison.Average(l.Outcomes));
