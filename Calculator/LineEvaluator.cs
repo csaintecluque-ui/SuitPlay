@@ -11,11 +11,11 @@ namespace Calculator;
 /// </summary>
 public static class LineEvaluator
 {
-    private static readonly MiniMax.MiniMaxSettings Settings = new();
 
     /// <summary>Levées garanties par la ligne pour chaque répartition (clé = main d'Est réelle).</summary>
-    public static Dictionary<string, (double Probability, int Tricks)> Outcomes(LineItem line, Result2 result)
+    public static Dictionary<string, (double Probability, int Tricks)> Outcomes(LineItem line, Result2 result, MiniMax.MiniMaxSettings settings = null)
     {
+        settings ??= new MiniMax.MiniMaxSettings();
         var outcomes = new Dictionary<string, (double, int)>();
         var cardsNS = result.North.Concat(result.South).OrderDescending().ToArray();
         var cardsEW = Utils.GetAllCards().Except(cardsNS).OrderDescending().ToArray();
@@ -47,14 +47,14 @@ public static class LineEvaluator
                 share = probability / classesByEast[eastKey];
             else
                 continue;
-            var tricks = Evaluate(sequences, result.North, east, result.South, west, cardsNS);
+            var tricks = Evaluate(sequences, result.North, east, result.South, west, cardsNS, settings);
             outcomes[Utils.CardsToString(east)] = (share, tricks);
         }
         return outcomes;
     }
 
     /// <summary>Levées garanties par la ligne pour une répartition donnée.</summary>
-    public static int Evaluate(List<Cards> sequences, Face[] north, Face[] east, Face[] south, Face[] west, Face[] cardsNS)
+    public static int Evaluate(List<Cards> sequences, Face[] north, Face[] east, Face[] south, Face[] west, Face[] cardsNS, MiniMax.MiniMaxSettings settings)
     {
         var initialCards = new Dictionary<Player, List<Face>>
         {
@@ -77,8 +77,7 @@ public static class LineEvaluator
                 return MiniMax.GetTrickCount(played, initialCards);
             if (count % 4 == 0 && !cardsEWList.Except(played.Data).Any())
                 return MiniMax.GetTrickCount(played, initialCards) +
-                       Math.Max(initialCards[Player.North].Count, initialCards[Player.South].Count) -
-                       played.Chunk(4).Count();
+                       MiniMax.RemainingNSTricks(initialCards, played, settings);
 
             var memoKey = played.ToString();
             if (memo.TryGetValue(memoKey, out var known))
@@ -90,13 +89,13 @@ public static class LineEvaluator
             {
                 // Au déclarant : il suit la ligne si elle prévoit ce cas
                 var lineCard = NextCardFromLine(played, sequences, cardsNS);
-                var legal = LegalCardsNS(played, initialCards);
+                var legal = LegalCardsNS(played, initialCards, settings);
                 if (lineCard.HasValue && legal.Contains(lineCard.Value))
                     value = Play(played, lineCard.Value);
                 else
                 {
                     // Hors de la ligne : il termine au mieux
-                    var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, Settings);
+                    var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, settings);
                     if (options.Count == 0) options = legal;
                     value = options.Max(card => Play(played, card));
                 }
@@ -104,7 +103,7 @@ public static class LineEvaluator
             else
             {
                 // À la défense : elle choisit la réponse la plus gênante
-                var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, Settings);
+                var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, settings);
                 value = options.Min(card => Play(played, card));
             }
 
@@ -140,14 +139,14 @@ public static class LineEvaluator
     }
 
     /// <summary>Cartes que Nord-Sud peuvent légalement jouer maintenant.</summary>
-    private static List<Face> LegalCardsNS(Cards played, Dictionary<Player, List<Face>> initialCards)
+    private static List<Face> LegalCardsNS(Cards played, Dictionary<Player, List<Face>> initialCards, MiniMax.MiniMaxSettings settings)
     {
         var position = played.Count() % 4;
         var north = initialCards[Player.North].Except(played.Data).ToList();
         var south = initialCards[Player.South].Except(played.Data).ToList();
         if (position == 0)
         {
-            var all = north.Concat(south).ToList();
+            var all = (MiniMax.NorthMayLead(initialCards, played, settings) ? north.Concat(south) : south).ToList();
             return all.Count == 0 ? [Face.Dummy] : all;
         }
         // 3e main : le partenaire de celui qui a entamé

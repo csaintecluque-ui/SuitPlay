@@ -8,6 +8,50 @@ public static class MiniMax
     public class MiniMaxSettings
     {
         public bool UseFalsecards { get; init; }
+
+        /// <summary>
+        /// Nombre d'entrées au mort (Nord) pour jouer la couleur depuis Nord ; null = illimité.
+        /// Comme dans SuitPlay original : chaque entame depuis Nord coûte une entrée,
+        /// sauf si Nord a remporté la levée précédente dans la couleur.
+        /// </summary>
+        public int? EntriesNorth { get; init; }
+    }
+
+    /// <summary>
+    /// Levées restantes pour Nord-Sud quand la défense n'a plus de carte dans la couleur,
+    /// en tenant compte des entrées au mort.
+    /// </summary>
+    public static int RemainingNSTricks(Dictionary<Player, List<Face>> initialCards, Cards playedCards, MiniMaxSettings settings)
+    {
+        var north = initialCards[Player.North].Except(playedCards.Data).ToList();
+        var south = initialCards[Player.South].Except(playedCards.Data).ToList();
+        if (NorthMayLead(initialCards, playedCards, settings))
+            return Math.Max(north.Count, south.Count);
+        if (south.Count == 0)
+            return 0;
+        // Sud entame ; si Nord a une carte plus haute que la plus petite de Sud, il prend la main et la garde
+        if (north.Count > 0 && north.Max() > south.Min())
+            return Math.Max(north.Count, south.Count);
+        return south.Count;
+    }
+
+    /// <summary>Nord peut-il entamer la prochaine levée, compte tenu des entrées disponibles ?</summary>
+    public static bool NorthMayLead(Dictionary<Player, List<Face>> initialCards, Cards playedCards, MiniMaxSettings settings)
+    {
+        if (settings?.EntriesNorth == null)
+            return true;
+        var tricks = playedCards.Chunk(4).ToList();
+        var used = 0;
+        var northWonPrevious = false;
+        foreach (var trick in tricks)
+        {
+            if (trick.Length == 0 || trick[0] == Face.Dummy)
+                break;
+            if (initialCards[Player.North].Contains(trick[0]) && !northWonPrevious)
+                used++;
+            northWonPrevious = trick.Length == 4 && initialCards[Player.North].Contains(trick.Max());
+        }
+        return northWonPrevious || used < settings.EntriesNorth.Value;
     }
     public static List<Item> CalculateBestPlayForCombination(MiniMaxSettings miniMaxSettings, params IEnumerable<Face>[] cards)
     {
@@ -43,8 +87,7 @@ public static class MiniMax
             if (playedCards.Count() % 4 == 0 && !cardsEW.Except(playedCards.Data).Any()) 
             {
                 var trickCount = GetTrickCount(playedCards, initialCards) +
-                                 Math.Max(initialCards[Player.North].Count, initialCards[Player.South].Count) -
-                                 playedCards.Chunk(4).Count();
+                                 RemainingNSTricks(initialCards, playedCards, miniMaxSettings);
                 return new Item(playedCards.Clone(), trickCount);
             }
 
@@ -119,6 +162,15 @@ public static class MiniMax
             var availableCardsNS = availableCardsNorth.Concat(availableCardsSouth).OrderDescending().ToList();
             if (availableCardsNS.Count == 0)
                 return [Face.Dummy];
+            // Entrées au mort : si Nord ne peut pas entamer, on joue depuis Sud
+            if (!NorthMayLead(initialCards, playedCards, miniMaxSettings))
+            {
+                if (availableCardsSouth.Count == 0)
+                    return [Face.Dummy];
+                if (cardsEWNotPlayed.Count == 1)
+                    return [availableCardsSouth.Max()];
+                return AvailableCardsFiltered(availableCardsSouth, cardsEWNotPlayed).ToList();
+            }
             // Play only high cards when the rest of the tricks is certain
             if (cardsEWNotPlayed.Count == 1)
                 return [availableCardsNS.Max()];

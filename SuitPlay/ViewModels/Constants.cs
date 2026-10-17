@@ -14,4 +14,6 @@ public static class Constants
     public const string VacantPlacesWest = "VacantPlacesWest";
     public const string RemoveTranspositions = "RemoveTranspositions";
     public const string UseFalsecards = "UseFalsecards";
+    public const string EnableEntriesNorth = "EnableEntriesNorth";
+    public const string EntriesNorth = "EntriesNorth";
 }

@@ -107,7 +107,11 @@ public partial class MainPage
                 StatusLabel.Text = "Donnez d'abord des cartes à Nord et à Sud.";
                 return;
             }
-            var miniMaxSettings = new MiniMax.MiniMaxSettings {UseFalsecards = Preferences.Get(Constants.UseFalsecards, false)} ;
+            var miniMaxSettings = new MiniMax.MiniMaxSettings
+            {
+                UseFalsecards = Preferences.Get(Constants.UseFalsecards, false),
+                EntriesNorth = Preferences.Get(Constants.EnableEntriesNorth, false) ? Preferences.Get(Constants.EntriesNorth, 1) : null
+            };
             bestPlay = await Task.Run(() => Calculate.CalculateBestPlay(northHand, southHand, miniMaxSettings));
             var calculateSettings = new Calculate.CalculateSettings
                 { EtalonsDirectory = Path.Combine(FileSystem.Current.AppDataDirectory, "Calculator.etalons_suitplay"), 
@@ -123,8 +127,9 @@ public partial class MainPage
             }
             
             result = await Task.Run(() => Calculate.GetResult2(bestPlay, northHand, southHand, calculateSettings));
-            analysis = await Task.Run(() => SuitAnalysis.Analyse(result));
-            StatusLabel.Text = $"Nord : {FrenchText.HandToString(northHand)}    Sud : {FrenchText.HandToString(southHand)}    (calcul en {stopWatch.Elapsed.TotalSeconds:0.0} s)";
+            analysis = await Task.Run(() => SuitAnalysis.Analyse(result, settings: miniMaxSettings));
+            var entriesText = miniMaxSettings.EntriesNorth is { } entries ? $"    Entrées au mort : {entries}" : "";
+            StatusLabel.Text = $"Nord : {FrenchText.HandToString(northHand)}    Sud : {FrenchText.HandToString(southHand)}{entriesText}    (calcul en {stopWatch.Elapsed.TotalSeconds:0.0} s)";
             ShowResults();
             EnableButtons(true);
         }

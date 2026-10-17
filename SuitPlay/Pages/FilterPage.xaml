@@ -1,25 +1,38 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewModels="using:SuitPlay.ViewModels"
              x:Class="SuitPlay.Pages.FilterPage"
-             Title="Places vacantes">
+             Title="Options">
     <ContentPage.BindingContext>
         <viewModels:FilterViewModel/>
     </ContentPage.BindingContext>
     <ContentPage.Content>
-        <Grid RowDefinitions="auto, auto" ColumnDefinitions="auto, auto, auto, auto, auto" 
-              x:DataType="viewModels:FilterViewModel">
-            <Switch Grid.Row="0" Grid.Column="0" IsToggled="{Binding EnableVacantPlaces}"/>
-            <Label Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="4" Text="Tenir compte des places vacantes (nombre de cartes inconnues de chaque adversaire)"/>
-            <Label Grid.Row="1" Grid.Column="1" Text="Ouest"/>
-            <Entry Grid.Row="1" Grid.Column="2" Text="{Binding VacantPlacesWest}" 
-                   IsEnabled="{Binding EnableVacantPlaces}" Keyboard="Numeric"/>
-            <Label Grid.Row="1" Grid.Column="3" Text="Est"/>
-            <Entry Grid.Row="1" Grid.Column="4" Text="{Binding VacantPlacesEast}" 
-                   IsEnabled="{Binding EnableVacantPlaces}" Keyboard="Numeric"/>
-        </Grid>
-        
+        <VerticalStackLayout Padding="20" Spacing="10" x:DataType="viewModels:FilterViewModel">
+            <Label Text="Places vacantes" FontAttributes="Bold" FontSize="16"/>
+            <HorizontalStackLayout Spacing="10">
+                <Switch IsToggled="{Binding EnableVacantPlaces}"/>
+                <Label Text="Tenir compte des places vacantes (nombre de cartes inconnues de chaque adversaire)" VerticalOptions="Center"/>
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="10">
+                <Label Text="Ouest" VerticalOptions="Center"/>
+                <Entry Text="{Binding VacantPlacesWest}" IsEnabled="{Binding EnableVacantPlaces}" Keyboard="Numeric" WidthRequest="70"/>
+                <Label Text="Est" VerticalOptions="Center"/>
+                <Entry Text="{Binding VacantPlacesEast}" IsEnabled="{Binding EnableVacantPlaces}" Keyboard="Numeric" WidthRequest="70"/>
+            </HorizontalStackLayout>
+
+            <Label Text="Communications" FontAttributes="Bold" FontSize="16" Margin="0,16,0,0"/>
+            <HorizontalStackLayout Spacing="10">
+                <Switch IsToggled="{Binding EnableEntriesNorth}"/>
+                <Label Text="Limiter les entrées au mort (Nord)" VerticalOptions="Center"/>
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="10">
+                <Label Text="Nombre d'entrées en Nord" VerticalOptions="Center"/>
+                <Entry Text="{Binding EntriesNorth}" IsEnabled="{Binding EnableEntriesNorth}" Keyboard="Numeric" WidthRequest="70"/>
+            </HorizontalStackLayout>
+            <Label FontSize="12" TextColor="Gray" LineBreakMode="WordWrap"
+                   Text="Chaque fois que la couleur est jouée depuis Nord, il faut une entrée, sauf si Nord vient de remporter la levée précédente dans la couleur. Sud est supposé avoir toujours la main quand il le faut."/>
+        </VerticalStackLayout>
     </ContentPage.Content>
 </ContentPage>

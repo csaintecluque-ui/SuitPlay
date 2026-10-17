@@ -52,6 +52,18 @@
                 </div>
             }
             <div class="opt-row">
+                <input id="entries" type="checkbox" @bind="useEntries" />
+                <label for="entries">Limiter les entrées au mort (Nord)</label>
+            </div>
+            @if (useEntries)
+            {
+                <div class="opt-row">
+                    <label for="en">Nombre d'entrées en Nord</label>
+                    <input id="en" type="number" min="0" max="13" @bind="entriesNorth" />
+                </div>
+                <p class="hint">Jouer la couleur depuis Nord coûte une entrée, sauf si Nord vient de remporter la levée précédente dans la couleur.</p>
+            }
+            <div class="opt-row">
                 <input id="false" type="checkbox" @bind="useFalsecards" />
                 <label for="false">Les adversaires peuvent fournir de fausses cartes</label>
             </div>
@@ -176,6 +188,8 @@
     private int vacantWest = 13;
     private int vacantEast = 13;
     private bool useFalsecards;
+    private bool useEntries;
+    private int entriesNorth = 1;
 
     private bool busy;
     private string status;
@@ -241,7 +255,12 @@
         try
         {
             var watch = System.Diagnostics.Stopwatch.StartNew();
-            bestPlay = Calculate.CalculateBestPlay(north, south, new MiniMax.MiniMaxSettings { UseFalsecards = useFalsecards });
+            var miniMaxSettings = new MiniMax.MiniMaxSettings
+            {
+                UseFalsecards = useFalsecards,
+                EntriesNorth = useEntries ? Math.Clamp(entriesNorth, 0, 13) : null
+            };
+            bestPlay = Calculate.CalculateBestPlay(north, south, miniMaxSettings);
             var settings = new Calculate.CalculateSettings { EtalonsDirectory = "/etalons", MaxLines = 10000 };
             if (useVacantPlaces)
             {
@@ -249,9 +268,10 @@
                 settings.VacantPlacesEast = Math.Clamp(vacantEast, 0, 13);
             }
             result = Calculate.GetResult2(bestPlay, north, south, settings);
-            analysis = SuitAnalysis.Analyse(result);
+            analysis = SuitAnalysis.Analyse(result, settings: miniMaxSettings);
             PrepareGoals();
-            status = $"Nord : {HandText('N')}   ·   Sud : {HandText('S')}   ·   calcul en {Num(watch.Elapsed.TotalSeconds, "0.0")} s";
+            var entriesText = miniMaxSettings.EntriesNorth is { } entries ? $"   ·   entrées au mort : {entries}" : "";
+            status = $"Nord : {HandText('N')}   ·   Sud : {HandText('S')}{entriesText}   ·   calcul en {Num(watch.Elapsed.TotalSeconds, "0.0")} s";
         }
         catch (MaxLinesException)
         {

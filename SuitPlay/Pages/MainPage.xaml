@@ -81,7 +81,7 @@
             <Button x:Name="DistributionsButton" Text="Répartitions" ImageSource="icons8_normal_distribution_histogram_32.png"
                     Clicked="DistributionsButton_OnClicked" Style="{StaticResource ToolbarButton}"
                     IsEnabled="False"/>
-            <Button Text="Places vacantes" ImageSource="icons8_filter_32.png"
+            <Button Text="Options" ImageSource="icons8_filter_32.png"
                     Clicked="OtherFactorsButton_OnClicked" Style="{StaticResource ToolbarButton}"/>
         </HorizontalStackLayout>
     </Grid>
