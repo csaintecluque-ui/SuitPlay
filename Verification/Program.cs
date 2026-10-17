@@ -25,13 +25,16 @@ var north = Utils.StringToCardArray(parts[0]);
 var south = Utils.StringToCardArray(parts[1]);
 var cardsNS = north.Concat(south).OrderDescending().ToArray();
 var watch = System.Diagnostics.Stopwatch.StartNew();
+double timeEngine = 0, timeLines = 0, timeJudge = 0;
 Result2 result;
 try
 {
     // En mode « juge », les lignes sont générées sans fausses cartes ; le juge, lui, les autorise ou non
     var bestPlay = Calculate.CalculateBestPlay(north, south, new MiniMax.MiniMaxSettings { UseFalsecards = falsecards && mode != "eval" });
+    timeEngine = watch.Elapsed.TotalSeconds;
     result = Calculate.GetResult2(bestPlay, north, south,
         new Calculate.CalculateSettings { EtalonsDirectory = etalonsDir, MaxLines = 10000 });
+    timeLines = watch.Elapsed.TotalSeconds - timeEngine;
 }
 catch (MaxLinesException)
 {
@@ -76,7 +79,9 @@ if (mode == "eval")
 {
     // Le « juge » rejoue chaque ligne candidate contre toutes les défenses
     var candidates = LineComparison.Candidates(ourLines, l => l.Outcomes, 40);
+    var judgeStart = watch.Elapsed.TotalSeconds;
     ourLines = candidates.Select(c => (c.Line, LineEvaluator.Outcomes(c.Line, result, judgeSettings))).ToList();
+    timeJudge = watch.Elapsed.TotalSeconds - judgeStart;
 }
 
 var maxTricks = Math.Max(
@@ -116,7 +121,7 @@ if (coverage < 0.999)
 var originalMp = LineComparison.MatchpointBest(originalLines, l => l.Outcomes);
 var ourMp = LineComparison.MatchpointBest(LineComparison.Candidates(ourLines, l => l.Outcomes), l => l.Outcomes);
 var sameMp = ourMp.Any(o => originalMp.Any(s => Utils.IsSameLine(o.Line.Header, s.Key, cardsNS)));
-Console.WriteLine($"MP|| {name} ({result.LineItems.Count} lignes, {watch.Elapsed.TotalSeconds:0.0} s) | {string.Join("<br>", originalMp.Select(s => s.Key))} | {string.Join("<br>", ourMp.Select(o => o.Line.Header))} | {(sameMp ? "oui" : "**non**")} |");
+Console.WriteLine($"MP|| {name} ({result.LineItems.Count} lignes, {watch.Elapsed.TotalSeconds:0.0} s : moteur {timeEngine:0.0}, lignes {timeLines:0.0}, juge {timeJudge:0.0}) | {string.Join("<br>", originalMp.Select(s => s.Key))} | {string.Join("<br>", ourMp.Select(o => o.Line.Header))} | {(sameMp ? "oui" : "**non**")} |");
 
 // Contrôle du juge : il évalue les lignes de l'original, comparées aux résultats de l'original
 if (mode == "eval" && result.LineItems.Count > 0)
