@@ -16,4 +16,10 @@ public static class Constants
     public const string UseFalsecards = "UseFalsecards";
     public const string EnableEntriesNorth = "EnableEntriesNorth";
     public const string EntriesNorth = "EntriesNorth";
+    public const string EnableImp = "EnableImp";
+    public const string ImpLevel = "ImpLevel";
+    public const string ImpStrain = "ImpStrain";
+    public const string ImpDoubled = "ImpDoubled";
+    public const string ImpVulnerable = "ImpVulnerable";
+    public const string ImpTricksNeeded = "ImpTricksNeeded";
 }

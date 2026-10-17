@@ -92,4 +92,58 @@ public class SuitAnalysis
         }
         return (wins / others.Count, losses / others.Count);
     }
+
+    /// <summary>Score moyen (en points de duplicate) de la ligne pour ce contrat.</summary>
+    public double ExpectedScore(LineItem line, ImpContract contract)
+    {
+        var outcomes = OutcomesOf(line);
+        var total = outcomes.Values.Sum(o => o.Probability);
+        return total <= 0 ? 0 : outcomes.Values.Sum(o => o.Probability * contract.Score(o.Tricks)) / total;
+    }
+
+    /// <summary>Gain moyen en IMP de la ligne <paramref name="a"/> face à la ligne <paramref name="b"/>.</summary>
+    public double ExpectedImps(LineItem a, LineItem b, ImpContract contract)
+    {
+        var outcomesA = OutcomesOf(a);
+        var outcomesB = OutcomesOf(b);
+        double imps = 0, total = 0;
+        foreach (var (key, outcomeA) in outcomesA)
+        {
+            if (!outcomesB.TryGetValue(key, out var outcomeB))
+                continue;
+            imps += outcomeA.Probability * ImpScoring.ToImps(contract.Score(outcomeA.Tricks) - contract.Score(outcomeB.Tricks));
+            total += outcomeA.Probability;
+        }
+        return total <= 0 ? 0 : imps / total;
+    }
+
+    /// <summary>
+    /// Meilleure ligne en IMP (« imp-best ») : son gain moyen en IMP est positif ou nul face à chacune des autres lignes.
+    /// S'il n'y en a pas, la ligne au meilleur gain cumulé. Renvoie aussi son gain moyen face à la meilleure autre ligne.
+    /// </summary>
+    public (LineItem Line, double WorstNetImps) ImpBest(ImpContract contract)
+    {
+        const double tolerance = 1e-9;
+        var lines = Lines.Where(l => l.Outcomes.Count > 0).Select(l => l.Line).ToList();
+        if (lines.Count == 0)
+            return (null, 0);
+        if (lines.Count == 1)
+            return (lines[0], 0);
+
+        var n = lines.Count;
+        var net = new double[n, n];
+        for (var i = 0; i < n; i++)
+            for (var j = i + 1; j < n; j++)
+            {
+                net[i, j] = ExpectedImps(lines[i], lines[j], contract);
+                net[j, i] = -net[i, j];
+            }
+
+        var sums = Enumerable.Range(0, n).Select(i => Enumerable.Range(0, n).Where(j => j != i).Sum(j => net[i, j])).ToArray();
+        var unbeaten = Enumerable.Range(0, n).Where(i => Enumerable.Range(0, n).All(j => j == i || net[i, j] >= -tolerance)).ToList();
+        var pool = unbeaten.Count > 0 ? unbeaten : Enumerable.Range(0, n).ToList();
+        var best = pool.OrderByDescending(i => sums[i]).First();
+        var worst = Enumerable.Range(0, n).Where(j => j != best).Min(j => net[best, j]);
+        return (lines[best], worst);
+    }
 }

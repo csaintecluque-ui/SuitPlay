@@ -64,6 +64,39 @@
                 <p class="hint">Jouer la couleur depuis Nord coûte une entrée, sauf si Nord vient de remporter la levée précédente dans la couleur.</p>
             }
             <div class="opt-row">
+                <input id="imp" type="checkbox" @bind="useImp" />
+                <label for="imp">Mode IMP : tenir compte du contrat (équipes)</label>
+            </div>
+            @if (useImp)
+            {
+                <div class="opt-row">
+                    <label for="lvl">Contrat</label>
+                    <select id="lvl" @bind="impLevel">
+                        @for (var l = 1; l <= 7; l++) { <option value="@l">@l</option> }
+                    </select>
+                    <select id="strain" @bind="impStrain">
+                        <option value="@Strain.Clubs">♣</option>
+                        <option value="@Strain.Diamonds">♦</option>
+                        <option value="@Strain.Hearts">♥</option>
+                        <option value="@Strain.Spades">♠</option>
+                        <option value="@Strain.NoTrump">SA</option>
+                    </select>
+                    <select id="dbl" @bind="impDoubled">
+                        <option value="0">non contré</option>
+                        <option value="1">contré</option>
+                        <option value="2">surcontré</option>
+                    </select>
+                </div>
+                <div class="opt-row">
+                    <input id="vul" type="checkbox" @bind="impVulnerable" />
+                    <label for="vul">Vulnérable</label>
+                </div>
+                <div class="opt-row">
+                    <label for="need">Levées nécessaires dans cette couleur pour réussir le contrat</label>
+                    <input id="need" type="number" min="0" max="13" @bind="impTricksNeeded" />
+                </div>
+            }
+            <div class="opt-row">
                 <input id="false" type="checkbox" @bind="useFalsecards" />
                 <label for="false">Les adversaires peuvent fournir de fausses cartes</label>
             </div>
@@ -156,7 +189,7 @@
                         <tbody>
                             @foreach (var row in DistributionRows(selectedLine))
                             {
-                                var target = selectedGoal is > 0 ? selectedGoal.Value : 0;
+                                var target = selectedGoal is > 0 ? selectedGoal.Value : selectedGoal == ImpGoal ? Contract.TricksNeeded : 0;
                                 <tr>
                                     <td>@row.West</td>
                                     <td>@row.East</td>
@@ -189,6 +222,27 @@
     private int vacantEast = 13;
     private bool useFalsecards;
     private bool useEntries;
+    private bool useImp;
+    private int impLevel = 4;
+    private Strain impStrain = Strain.Spades;
+    private int impDoubled;
+    private bool impVulnerable;
+    private int impTricksNeeded = 3;
+    private const int ImpGoal = -2;
+
+    private ImpContract Contract => new()
+    {
+        Level = Math.Clamp(impLevel, 1, 7), Strain = impStrain, Doubled = Math.Clamp(impDoubled, 0, 2),
+        Vulnerable = impVulnerable, TricksNeeded = Math.Clamp(impTricksNeeded, 0, 13)
+    };
+
+    private string ContractText()
+    {
+        var c = Contract;
+        var strain = c.Strain switch { Strain.Clubs => "♣", Strain.Diamonds => "♦", Strain.Hearts => "♥", Strain.Spades => "♠", _ => "SA" };
+        var dbl = c.Doubled switch { 1 => " contré", 2 => " surcontré", _ => "" };
+        return $"{c.Level}{strain}{dbl}{(c.Vulnerable ? " vulnérable" : "")}";
+    }
     private int entriesNorth = 1;
 
     private bool busy;
@@ -308,11 +362,16 @@
         goalOptions = goalTricks.Select(x => (int?)x).ToList();
         goalOptions.Add(null);
         goalOptions.Add(MatchpointGoal);
+        if (useImp)
+        {
+            goalOptions.Insert(0, ImpGoal);
+        }
         selectedGoalIndex = 0;
     }
 
     private LineItem BestLineFor(int? goal) =>
-        goal == MatchpointGoal ? analysis.MatchpointBest
+        goal == ImpGoal ? analysis.ImpBest(Contract).Line
+        : goal == MatchpointGoal ? analysis.MatchpointBest
         : goal == null || goal <= guaranteedTricks ? analysis.BestAverage().Line
         : analysis.BestFor(goal.Value).Line;
 
@@ -322,12 +381,22 @@
     private double AverageOf(LineItem line) => LineComparison.Average(analysis.OutcomesOf(line));
 
     private static string GoalLabel(int? goal) =>
-        goal == MatchpointGoal ? "Meilleure ligne en matchpoints"
+        goal == ImpGoal ? "Meilleure ligne en IMP (selon le contrat)"
+        : goal == MatchpointGoal ? "Meilleure ligne en matchpoints"
         : goal == null ? "Faire le maximum de levées (moyenne)"
         : $"Faire au moins {goal} levée{(goal > 1 ? "s" : "")}";
 
     private string SummaryText(int? goal, LineItem line)
     {
+        if (goal == ImpGoal)
+        {
+            var contract = Contract;
+            var (_, worst) = analysis.ImpBest(contract);
+            var make = LineComparison.ProbabilityAtLeast(analysis.OutcomesOf(line), contract.TricksNeeded);
+            return $"En IMP ({ContractText()}, {contract.TricksNeeded} levée{(contract.TricksNeeded > 1 ? "s" : "")} nécessaire{(contract.TricksNeeded > 1 ? "s" : "")} dans la couleur) : "
+                 + $"contrat réussi dans {Pct(make)} % des cas, marque moyenne {Num(analysis.ExpectedScore(line, contract), "0")} points. "
+                 + (worst >= 0 ? $"Face à chaque autre ligne, elle gagne en moyenne au moins {Num(worst, "0.00")} IMP." : $"C'est la ligne au meilleur bilan en IMP face aux autres.");
+        }
         if (goal == MatchpointGoal)
         {
             var (wins, losses) = analysis.MatchpointRecord(line);

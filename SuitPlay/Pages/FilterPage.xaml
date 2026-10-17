@@ -31,6 +31,23 @@
                 <Label Text="Nombre d'entrées en Nord" VerticalOptions="Center"/>
                 <Entry Text="{Binding EntriesNorth}" IsEnabled="{Binding EnableEntriesNorth}" Keyboard="Numeric" WidthRequest="70"/>
             </HorizontalStackLayout>
+            <Label Text="Mode IMP (équipes)" FontAttributes="Bold" FontSize="16" Margin="0,16,0,0"/>
+            <HorizontalStackLayout Spacing="10">
+                <Switch IsToggled="{Binding EnableImp}"/>
+                <Label Text="Tenir compte du contrat (objectif « Meilleure ligne en IMP »)" VerticalOptions="Center"/>
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="10" IsEnabled="{Binding EnableImp}">
+                <Label Text="Contrat" VerticalOptions="Center"/>
+                <Entry Text="{Binding ImpLevel}" Keyboard="Numeric" WidthRequest="50"/>
+                <Picker ItemsSource="{Binding Strains}" SelectedIndex="{Binding ImpStrain}" WidthRequest="140"/>
+                <Picker ItemsSource="{Binding DoubledOptions}" SelectedIndex="{Binding ImpDoubled}" WidthRequest="140"/>
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="10" IsEnabled="{Binding EnableImp}">
+                <CheckBox IsChecked="{Binding ImpVulnerable}"/>
+                <Label Text="Vulnérable" VerticalOptions="Center"/>
+                <Label Text="Levées nécessaires dans la couleur" VerticalOptions="Center" Margin="20,0,0,0"/>
+                <Entry Text="{Binding ImpTricksNeeded}" Keyboard="Numeric" WidthRequest="50"/>
+            </HorizontalStackLayout>
             <Label FontSize="12" TextColor="Gray" LineBreakMode="WordWrap"
                    Text="Chaque fois que la couleur est jouée depuis Nord, il faut une entrée, sauf si Nord vient de remporter la levée précédente dans la couleur. Sud est supposé avoir toujours la main quand il le faut."/>
         </VerticalStackLayout>

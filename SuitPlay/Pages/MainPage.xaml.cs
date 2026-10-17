@@ -193,6 +193,11 @@ public partial class MainPage
         items.Add("Faire le maximum de levées (moyenne)");
         goals.Add(MatchpointGoal);
         items.Add("Meilleure ligne en matchpoints");
+        if (Preferences.Get(Constants.EnableImp, false))
+        {
+            goals.Insert(0, ImpGoal);
+            items.Insert(0, "Meilleure ligne en IMP (selon le contrat)");
+        }
         GoalPicker.ItemsSource = items;
         GoalPicker.SelectedIndex = 0;
 
@@ -208,9 +213,28 @@ public partial class MainPage
     private int guaranteedTricks;
     private SuitAnalysis analysis;
     private const int MatchpointGoal = -1;
+    private const int ImpGoal = -2;
+
+    private static ImpContract Contract => new()
+    {
+        Level = Math.Clamp(Preferences.Get(Constants.ImpLevel, 4), 1, 7),
+        Strain = (Strain)Math.Clamp(Preferences.Get(Constants.ImpStrain, 3), 0, 4),
+        Doubled = Math.Clamp(Preferences.Get(Constants.ImpDoubled, 0), 0, 2),
+        Vulnerable = Preferences.Get(Constants.ImpVulnerable, false),
+        TricksNeeded = Math.Clamp(Preferences.Get(Constants.ImpTricksNeeded, 3), 0, 13)
+    };
+
+    private static string ContractText(ImpContract c)
+    {
+        var strain = c.Strain switch { Strain.Clubs => "♣", Strain.Diamonds => "♦", Strain.Hearts => "♥", Strain.Spades => "♠", _ => "SA" };
+        var dbl = c.Doubled switch { 1 => " contré", 2 => " surcontré", _ => "" };
+        return $"{c.Level}{strain}{dbl}{(c.Vulnerable ? " vulnérable" : "")}";
+    }
 
     private LineItem BestLineFor(int? goal)
     {
+        if (goal == ImpGoal)
+            return analysis.ImpBest(Contract).Line;
         if (goal == MatchpointGoal)
             return analysis.MatchpointBest;
         return goal == null || goal <= guaranteedTricks
@@ -224,6 +248,16 @@ public partial class MainPage
     }
 
     private double AverageOf(LineItem line) => LineComparison.Average(analysis.OutcomesOf(line));
+
+    private string ImpSummary(LineItem line)
+    {
+        var contract = Contract;
+        var (_, worst) = analysis.ImpBest(contract);
+        var make = LineComparison.ProbabilityAtLeast(analysis.OutcomesOf(line), contract.TricksNeeded);
+        var needed = $"{contract.TricksNeeded} levée{(contract.TricksNeeded > 1 ? "s" : "")} nécessaire{(contract.TricksNeeded > 1 ? "s" : "")} dans la couleur";
+        return $"En IMP ({ContractText(contract)}, {needed}) : contrat réussi dans {make * 100:0.0} % des cas, marque moyenne {analysis.ExpectedScore(line, contract):0} points. "
+             + (worst >= 0 ? $"Face à chaque autre ligne, elle gagne en moyenne au moins {worst:0.00} IMP." : "C'est la ligne au meilleur bilan en IMP face aux autres.");
+    }
 
     private void AddResultRow(int row, string goal, string chances, string firstCard, bool header = false)
     {
@@ -262,7 +296,9 @@ public partial class MainPage
         if (line == null)
             return;
 
-        GoalSummary.Text = goal == MatchpointGoal
+        GoalSummary.Text = goal == ImpGoal
+            ? ImpSummary(line)
+            : goal == MatchpointGoal
             ? $"En matchpoints, cette ligne ne perd contre aucune autre en face à face. Elle rapporte {AverageOf(line):0.00} levées en moyenne."
             : goal == null
             ? $"Cette ligne rapporte en moyenne {AverageOf(line):0.00} levées."
