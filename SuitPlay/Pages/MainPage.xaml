@@ -46,6 +46,10 @@
                 <Border>
                     <views:HandView x:Name="South" Padding="10"/>
                 </Border>
+                <Label Text="Défausses ou coupes (cartes de Nord-Sud qui ne seront pas jouées dans la couleur)" HorizontalOptions="Center" FontSize="12" TextColor="#ACACAC"/>
+                <Border StrokeDashArray="4,3">
+                    <views:HandView x:Name="Discards" Padding="10"/>
+                </Border>
 
                 <HorizontalStackLayout HorizontalOptions="Center">
                     <Button Text="Tout effacer" Clicked="ResetButton_OnClicked" Margin="20,10"/>

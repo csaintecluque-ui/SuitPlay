@@ -45,7 +45,7 @@ public static class LineEvaluator
     {
         var outcomes = new Dictionary<string, (double, int)>();
         var cardsNS = result.North.Concat(result.South).OrderDescending().ToArray();
-        var cardsEW = Utils.GetAllCards().Except(cardsNS).OrderDescending().ToArray();
+        var cardsEW = Utils.GetAllCards().Except(cardsNS).Except(result.Discarded ?? []).OrderDescending().ToArray();
         var sequences = line.Line.Concat(line.GeneratedLines).Where(x => x != null && x.Count() > 0).Distinct().ToList();
 
         // Probabilité par main d'Est (en petites cartes), telle que calculée par le moteur

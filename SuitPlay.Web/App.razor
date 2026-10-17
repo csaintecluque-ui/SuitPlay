@@ -14,17 +14,20 @@
             <button class="@(currentHand == 'N' ? "on-n" : "")" @onclick="@(() => currentHand = 'N')">Donner à Nord</button>
             <button class="@(currentHand == 'S' ? "on-s" : "")" @onclick="@(() => currentHand = 'S')">Donner à Sud</button>
         </div>
+        <button class="seg-wide @(currentHand == 'D' ? "on-d" : "")" @onclick="@(() => currentHand = 'D')">
+            Défausse ou coupe (carte de Nord-Sud non jouée dans la couleur)
+        </button>
 
         <div class="cards">
             @foreach (var face in AllFaces)
             {
                 var owner = Owner(face);
-                <button class="card @(owner == 'N' ? "n" : owner == 'S' ? "s" : "")" @onclick="@(() => Toggle(face))"
+                <button class="card @(owner == 'N' ? "n" : owner == 'S' ? "s" : owner == 'D' ? "d" : "")" @onclick="@(() => Toggle(face))"
                         aria-label="@FrenchText.CardName(face)">
                     @FrenchText.ShortName(face)
                     @if (owner != null)
                     {
-                        <span class="tag">@(owner == 'N' ? "NORD" : "SUD")</span>
+                        <span class="tag">@(owner == 'N' ? "NORD" : owner == 'S' ? "SUD" : "DÉF.")</span>
                     }
                 </button>
             }
@@ -33,6 +36,10 @@
         <div class="hands">
             <div class="hand n"><b>Nord</b><span>@HandText('N')</span></div>
             <div class="hand s"><b>Sud</b><span>@HandText('S')</span></div>
+            @if (CardsOf('D').Length > 0)
+            {
+                <div class="hand d"><b>Déf.</b><span>@HandText('D')</span></div>
+            }
         </div>
 
         <details class="options">
@@ -300,6 +307,7 @@
     {
         var north = CardsOf('N');
         var south = CardsOf('S');
+        var discarded = CardsOf('D');
         busy = true;
         isError = false;
         status = "Calcul en cours…";
@@ -314,8 +322,8 @@
                 UseFalsecards = useFalsecards,
                 EntriesNorth = useEntries ? Math.Clamp(entriesNorth, 0, 13) : null
             };
-            bestPlay = Calculate.CalculateBestPlay(north, south, miniMaxSettings);
-            var settings = new Calculate.CalculateSettings { EtalonsDirectory = "/etalons", MaxLines = 10000 };
+            bestPlay = Calculate.CalculateBestPlay(north, south, miniMaxSettings, discarded);
+            var settings = new Calculate.CalculateSettings { EtalonsDirectory = "/etalons", MaxLines = 10000, Discarded = discarded };
             if (useVacantPlaces)
             {
                 settings.VacantPlacesWest = Math.Clamp(vacantWest, 0, 13);
@@ -325,7 +333,8 @@
             analysis = SuitAnalysis.Analyse(result, settings: miniMaxSettings);
             PrepareGoals();
             var entriesText = miniMaxSettings.EntriesNorth is { } entries ? $"   ·   entrées au mort : {entries}" : "";
-            status = $"Nord : {HandText('N')}   ·   Sud : {HandText('S')}{entriesText}   ·   calcul en {Num(watch.Elapsed.TotalSeconds, "0.0")} s";
+            var discardText = discarded.Length > 0 ? $"   ·   défausses : {HandText('D')}" : "";
+            status = $"Nord : {HandText('N')}   ·   Sud : {HandText('S')}{discardText}{entriesText}   ·   calcul en {Num(watch.Elapsed.TotalSeconds, "0.0")} s";
         }
         catch (MaxLinesException)
         {
@@ -411,7 +420,7 @@
 
     private IEnumerable<string> Steps(LineItem line)
     {
-        var text = FrenchText.DescribeLine(line.LongestLineIncludingGenerated, result.North, result.South);
+        var text = FrenchText.DescribeLine(line.LongestLineIncludingGenerated, result.North, result.South, result.Discarded);
         foreach (var raw in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var sentence = raw.Trim();

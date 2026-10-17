@@ -18,6 +18,8 @@ public class Calculate
         public bool RemoveTranspositions { get; init; }
         public int VacantPlacesWest { get; set; } = 13;
         public int VacantPlacesEast { get; set; } = 13;
+        /// <summary>Cartes de Nord-Sud qui ne seront pas jouées dans la couleur (défausses ou coupes).</summary>
+        public Face[] Discarded { get; init; } = [];
     }
     private static readonly ArrayEqualityComparer<Face> ArrayEqualityComparer = new();
     private static readonly FaceArrayComparer FaceArrayComparer = new();
@@ -28,9 +30,9 @@ public class Calculate
         return resultItem.Children == null ? [] : resultItem.Children.Concat(resultItem.Children.SelectMany(GetDescendents));
     }
 
-    private static Dictionary<Face[], DistributionItem> GetDistributionItems(Face[] cardsNS, List<Face[]> combinationsInTree, int vacantPlacesEast, int vacantPlacesWest)
+    private static Dictionary<Face[], DistributionItem> GetDistributionItems(Face[] cardsNS, List<Face[]> combinationsInTree, int vacantPlacesEast, int vacantPlacesWest, Face[] discarded)
     {
-        var cardsEW = Utils.GetAllCards().Except(cardsNS).ToList();
+        var cardsEW = Utils.GetAllCards().Except(cardsNS).Except(discarded ?? []).ToList();
         var combinations = Combinations.AllCombinations(cardsEW);
         var distributionList = combinationsInTree.ToDictionary(key => key, value =>
         {
@@ -53,7 +55,7 @@ public class Calculate
         Log.Information("Start GetResult2");
         var cardsNS = north.Concat(south).OrderDescending().ToArray();
         var combinationsInTree = bestPlay.Keys.OrderBy(x => x, FaceArrayComparer).ToList();
-        var distributionList = GetDistributionItems(cardsNS, combinationsInTree, calculateSettings.VacantPlacesEast, calculateSettings.VacantPlacesWest);
+        var distributionList = GetDistributionItems(cardsNS, combinationsInTree, calculateSettings.VacantPlacesEast, calculateSettings.VacantPlacesWest, calculateSettings.Discarded);
         var possibleNrOfTricks = bestPlay.SelectMany(x => x.Value).Select(x => x.Tricks).Distinct().OrderDescending().SkipLast(1).ToList();
         var combinationsInSuitPlay = new List<Face[]>();
 
@@ -64,6 +66,7 @@ public class Calculate
             PossibleNrOfTricks = possibleNrOfTricks, 
             North = north,
             South = south,
+            Discarded = calculateSettings.Discarded ?? [],
             CombinationsInSuitPlay = combinationsInSuitPlay 
         };
 
@@ -473,10 +476,11 @@ public class Calculate
         }
     }    
 
-    public static IDictionary<Face[], List<Item>> CalculateBestPlay(Face[] north, Face[] south, MiniMax.MiniMaxSettings miniMaxSettings)
+    /// <param name="discarded">Cartes de Nord-Sud qui ne seront pas jouées dans la couleur (défausses ou coupes) : absentes du jeu, mais pas chez les adversaires.</param>
+    public static IDictionary<Face[], List<Item>> CalculateBestPlay(Face[] north, Face[] south, MiniMax.MiniMaxSettings miniMaxSettings, Face[] discarded = null)
     {
         Log.Information("Calculating best play North:{@north} South:{@south}",  north, south);
-        var cardsEW = Utils.GetAllCards().Except(north).Except(south).ToArray();
+        var cardsEW = Utils.GetAllCards().Except(north).Except(south).Except(discarded ?? []).ToArray();
         var combinations = Combinations.AllCombinations(cardsEW.ToList());
         var cardsNS = north.Concat(south).OrderDescending();
         combinations.RemoveAll(faces => SimilarCombinationsCount(combinations, faces, cardsNS) > 0);

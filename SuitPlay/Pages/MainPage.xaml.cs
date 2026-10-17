@@ -17,6 +17,7 @@ public partial class MainPage
             field = value;
             North.BackgroundColor = Colors.Transparent;
             South.BackgroundColor = Colors.Transparent;
+            Discards.BackgroundColor = Colors.Transparent;
             field.BackgroundColor = Color.FromArgb("#40512BD4");
         }
     }
@@ -37,6 +38,8 @@ public partial class MainPage
         North.OnHandTapped += TapGestureRecognizer_OnHandTapped;
         South.OnImageTapped += TapGestureRecognizer_OnImageTapped;
         South.OnHandTapped += TapGestureRecognizer_OnHandTapped;
+        Discards.OnImageTapped += TapGestureRecognizer_OnImageTapped;
+        Discards.OnHandTapped += TapGestureRecognizer_OnHandTapped;
         InitCards();
         LoadSettings();
         SelectedHandView = North;
@@ -46,9 +49,11 @@ public partial class MainPage
     {
         var north = Preferences.Get("North", "AQ");
         var south = Preferences.Get("South", "32");
-        var remainingCards = Utils.CardsToString(Utils.GetAllCards()).Except(north).Except(south);
+        var discards = Preferences.Get("Discards", "");
+        var remainingCards = Utils.CardsToString(Utils.GetAllCards()).Except(north).Except(south).Except(discards);
         ((HandViewModel)North.BindingContext).ShowHand($"{north}", "default", dictionary);
         ((HandViewModel)South.BindingContext).ShowHand($"{south}", "default", dictionary);
+        ((HandViewModel)Discards.BindingContext).ShowHand($"{discards}", "default", dictionary);
         ((HandViewModel)Cards.BindingContext).ShowHand(new string(remainingCards.ToArray()), "default", dictionary);
     }
     
@@ -56,6 +61,7 @@ public partial class MainPage
     {
         Preferences.Set("North", Utils.CardsToString(GetHand(North)));
         Preferences.Set("South", Utils.CardsToString(GetHand(South)));
+        Preferences.Set("Discards", Utils.CardsToString(GetHand(Discards)));
     }
 
     private void InitCards()
@@ -63,6 +69,7 @@ public partial class MainPage
         ((HandViewModel)Cards.BindingContext).ShowHand(Utils.CardsToString(Utils.GetAllCards()), "default", dictionary);
         ((HandViewModel)North.BindingContext).Cards.Clear();
         ((HandViewModel)South.BindingContext).Cards.Clear();
+        ((HandViewModel)Discards.BindingContext).Cards.Clear();
     }
 
     private void TapGestureRecognizer_OnImageTapped(object sender, HandView handView)
@@ -102,6 +109,7 @@ public partial class MainPage
             var stopWatch = Stopwatch.StartNew();
             var northHand = GetHand(North);
             var southHand = GetHand(South);
+            var discardedCards = GetHand(Discards);
             if (northHand.Length + southHand.Length == 0)
             {
                 StatusLabel.Text = "Donnez d'abord des cartes à Nord et à Sud.";
@@ -112,9 +120,10 @@ public partial class MainPage
                 UseFalsecards = Preferences.Get(Constants.UseFalsecards, false),
                 EntriesNorth = Preferences.Get(Constants.EnableEntriesNorth, false) ? Preferences.Get(Constants.EntriesNorth, 1) : null
             };
-            bestPlay = await Task.Run(() => Calculate.CalculateBestPlay(northHand, southHand, miniMaxSettings));
+            bestPlay = await Task.Run(() => Calculate.CalculateBestPlay(northHand, southHand, miniMaxSettings, discardedCards));
             var calculateSettings = new Calculate.CalculateSettings
-                { EtalonsDirectory = Path.Combine(FileSystem.Current.AppDataDirectory, "Calculator.etalons_suitplay"), 
+                {
+                    Discarded = discardedCards, EtalonsDirectory = Path.Combine(FileSystem.Current.AppDataDirectory, "Calculator.etalons_suitplay"), 
                     MaxLines = Preferences.Get(Constants.MaxLinesInCalculate, 10000),
                     FilterInferiorLines = Preferences.Get(Constants.FilterInferiorLines, false),
                     RemoveDuplicateLines = Preferences.Get(Constants.RemoveDuplicateLines, false),
@@ -129,6 +138,8 @@ public partial class MainPage
             result = await Task.Run(() => Calculate.GetResult2(bestPlay, northHand, southHand, calculateSettings));
             analysis = await Task.Run(() => SuitAnalysis.Analyse(result, settings: miniMaxSettings));
             var entriesText = miniMaxSettings.EntriesNorth is { } entries ? $"    Entrées au mort : {entries}" : "";
+            if (discardedCards.Length > 0)
+                entriesText = $"    Défausses : {FrenchText.HandToString(discardedCards)}" + entriesText;
             StatusLabel.Text = $"Nord : {FrenchText.HandToString(northHand)}    Sud : {FrenchText.HandToString(southHand)}{entriesText}    (calcul en {stopWatch.Elapsed.TotalSeconds:0.0} s)";
             ShowResults();
             EnableButtons(true);
@@ -306,7 +317,7 @@ public partial class MainPage
                 ? $"{goal} levée{(goal > 1 ? "s" : "")} assurée{(goal > 1 ? "s" : "")} quelle que soit la répartition."
                 : $"Cette ligne réussit dans {ProbabilityFor(line, goal.Value) * 100:0.0} % des cas.";
         var sequence = line.LongestLineIncludingGenerated;
-        LineDescription.Text = FrenchText.DescribeLine(sequence, result.North, result.South);
+        LineDescription.Text = FrenchText.DescribeLine(sequence, result.North, result.South, result.Discarded);
         var variants = FrenchText.DescribeVariants(line, result);
         VariantsTitle.IsVisible = variants.Count > 0;
         VariantsText.IsVisible = variants.Count > 0;

@@ -124,6 +124,20 @@ button, input, select { font: inherit; color: inherit; }
 .seg button.on-n { border-color: var(--north); background: var(--north-soft); color: var(--north); }
 .seg button.on-s { border-color: var(--south); background: var(--south-soft); color: var(--south); }
 
+.seg-wide {
+    width: 100%;
+    border: 2px dashed var(--line);
+    background: transparent;
+    border-radius: 12px;
+    padding: 8px;
+    margin: -4px 0 12px;
+    font-size: .85rem;
+    color: var(--muted);
+    cursor: pointer;
+    min-height: 40px;
+}
+.seg-wide.on-d { border-style: solid; border-color: var(--muted); background: var(--surface-2); color: var(--text); font-weight: 600; }
+
 /* Cartes */
 .cards {
     display: grid;
@@ -159,6 +173,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .card.n { border: 2.5px solid var(--north); background: var(--north-soft); color: var(--north); }
 .card.s { border: 2.5px solid var(--south); background: var(--south-soft); color: var(--south); }
+.card.d { border: 2px dashed var(--muted); background: var(--surface-2); color: var(--muted); text-decoration: line-through; }
 
 .hands {
     margin-top: 12px;
@@ -176,6 +191,7 @@ button, input, select { font: inherit; color: inherit; }
 .hand b { min-width: 3.2em; }
 .hand.n b { color: var(--north); }
 .hand.s b { color: var(--south); }
+.hand.d b { color: var(--muted); }
 .hand span { font-size: 1.15rem; font-weight: 600; letter-spacing: 1px; }
 
 .actions {

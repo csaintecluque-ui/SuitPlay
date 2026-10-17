@@ -65,12 +65,12 @@ public static class FrenchText
     }
 
     /// <summary>Explique la ligne de jeu, levée par levée, en supposant que les adversaires fournissent petit sauf indication.</summary>
-    public static string DescribeLine(Cards line, Face[] north, Face[] south)
+    public static string DescribeLine(Cards line, Face[] north, Face[] south, Face[] discarded = null)
     {
         if (line == null || line.Count() == 0)
             return "Aucune ligne de jeu à afficher.";
 
-        var played = new HashSet<Face>();
+        var played = new HashSet<Face>(discarded ?? []); // les défausses ne sont pas chez les adversaires
         var text = new StringBuilder();
         var number = 1;
         foreach (var trick in line.Chunk(4))
@@ -236,7 +236,7 @@ public static class FrenchText
                     ? $"Si {who} fournit petit à la levée {trickNumber + 1} au lieu {OfCard(main[index])}"
                     : $"Si {who} fournit {CardName(card)} à la levée {trickNumber + 1}";
 
-            var played = new HashSet<Face>(play.Take(trickNumber * 4).Where(c => c != Face.SmallCard && c != Face.Dummy));
+            var played = new HashSet<Face>(play.Take(trickNumber * 4).Where(c => c != Face.SmallCard && c != Face.Dummy).Concat(result.Discarded ?? []));
             var steps = new List<string>();
             if (position == 1 && trick.Length >= 3 && trick[2] != Face.Dummy)
                 steps.Add($"mettez {CardName(trick[2])} de {(leadFromNorth ? "Sud" : "Nord")}");
