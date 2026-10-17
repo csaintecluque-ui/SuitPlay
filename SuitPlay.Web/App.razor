@@ -89,8 +89,13 @@
                     }
                     <tr>
                         <td>Maximum de levées</td>
-                        <td class="pct">@Num(BestLineFor(null).Average.Value, "0.00") en moy.</td>
+                        <td class="pct">@Num(AverageOf(BestLineFor(null)), "0.00") en moy.</td>
                         <td class="first">@FirstCard(BestLineFor(null))</td>
+                    </tr>
+                    <tr>
+                        <td>Matchpoints</td>
+                        <td class="pct">meilleure en face à face</td>
+                        <td class="first">@FirstCard(BestLineFor(MatchpointGoal))</td>
                     </tr>
                 </tbody>
             </table>
@@ -139,12 +144,12 @@
                         <tbody>
                             @foreach (var row in DistributionRows(selectedLine))
                             {
-                                var target = selectedGoal ?? 0;
+                                var target = selectedGoal is > 0 ? selectedGoal.Value : 0;
                                 <tr>
                                     <td>@row.West</td>
                                     <td>@row.East</td>
                                     <td class="num">@Pct(row.Probability) %</td>
-                                    <td class="num @(selectedGoal == null ? "" : row.Tricks >= target ? "ok" : "ko")">@row.Tricks</td>
+                                    <td class="num @(target == 0 ? "" : row.Tricks >= target ? "ok" : "ko")">@row.Tricks</td>
                                 </tr>
                             }
                         </tbody>
@@ -177,7 +182,9 @@
     private bool isError;
 
     private Result2 result;
+    private SuitAnalysis analysis;
     private IDictionary<Face[], List<Item>> bestPlay;
+    private const int MatchpointGoal = -1;
     private int guaranteedTricks;
     private int maxTricks;
     private List<int> goalTricks = [];
@@ -242,6 +249,7 @@
                 settings.VacantPlacesEast = Math.Clamp(vacantEast, 0, 13);
             }
             result = Calculate.GetResult2(bestPlay, north, south, settings);
+            analysis = SuitAnalysis.Analyse(result);
             PrepareGoals();
             status = $"Nord : {HandText('N')}   ·   Sud : {HandText('S')}   ·   calcul en {Num(watch.Elapsed.TotalSeconds, "0.0")} s";
         }
@@ -273,34 +281,40 @@
             return;
         }
 
-        var allTricks = bestPlay.SelectMany(x => x.Value).Select(x => x.Tricks).ToList();
-        guaranteedTricks = allTricks.Min();
-        maxTricks = allTricks.Max();
-        var tricks = result.PossibleNrOfTricks.Where(x => x > guaranteedTricks).ToList();
-        if (guaranteedTricks > 0)
-            tricks.Add(guaranteedTricks);
-        goalTricks = tricks.Distinct().OrderByDescending(x => x).ToList();
+        guaranteedTricks = analysis.GuaranteedTricks;
+        maxTricks = analysis.MaxTricks;
+        goalTricks = analysis.Goals.Where(g => g > 0).ToList();
 
         goalOptions = goalTricks.Select(x => (int?)x).ToList();
         goalOptions.Add(null);
+        goalOptions.Add(MatchpointGoal);
         selectedGoalIndex = 0;
     }
 
     private LineItem BestLineFor(int? goal) =>
-        goal == null || goal <= guaranteedTricks
-            ? FrenchText.BestLineFor(result.LineItems, null)
-            : FrenchText.BestLineFor(result.LineItems, goal);
+        goal == MatchpointGoal ? analysis.MatchpointBest
+        : goal == null || goal <= guaranteedTricks ? analysis.BestAverage().Line
+        : analysis.BestFor(goal.Value).Line;
 
     private double ProbabilityFor(LineItem line, int goal) =>
-        goal <= guaranteedTricks ? 1.0 : FrenchText.ProbabilityFor(line, goal);
+        goal <= guaranteedTricks ? 1.0 : LineComparison.ProbabilityAtLeast(analysis.OutcomesOf(line), goal);
+
+    private double AverageOf(LineItem line) => LineComparison.Average(analysis.OutcomesOf(line));
 
     private static string GoalLabel(int? goal) =>
-        goal == null ? "Faire le maximum de levées (moyenne)" : $"Faire au moins {goal} levée{(goal > 1 ? "s" : "")}";
+        goal == MatchpointGoal ? "Meilleure ligne en matchpoints"
+        : goal == null ? "Faire le maximum de levées (moyenne)"
+        : $"Faire au moins {goal} levée{(goal > 1 ? "s" : "")}";
 
     private string SummaryText(int? goal, LineItem line)
     {
+        if (goal == MatchpointGoal)
+        {
+            var (wins, losses) = analysis.MatchpointRecord(line);
+            return $"En matchpoints, cette ligne ne perd contre aucune autre en face à face (elle les bat en moyenne {Pct(wins)} % du temps, perd {Pct(losses)} %). Elle rapporte {Num(AverageOf(line), "0.00")} levées en moyenne.";
+        }
         if (goal == null)
-            return $"Cette ligne rapporte en moyenne {Num(line.Average.Value, "0.00")} levées.";
+            return $"Cette ligne rapporte en moyenne {Num(AverageOf(line), "0.00")} levées.";
         if (goal <= guaranteedTricks)
             return $"{goal} levée{(goal > 1 ? "s" : "")} assurée{(goal > 1 ? "s" : "")} quelle que soit la répartition.";
         return $"Cette ligne réussit dans {Pct(ProbabilityFor(line, goal.Value))} % des cas.";
@@ -332,16 +346,18 @@
     private List<DistributionRow> DistributionRows(LineItem line)
     {
         var cardsNS = result.North.Concat(result.South).OrderDescending().ToArray();
-        var rows = new List<DistributionRow>();
-        foreach (var item in line.Items2)
-        {
-            var east = item.Combination.ConvertToSmallCards(cardsNS);
-            var distribution = result.DistributionItems.FirstOrDefault(d => d.East.SequenceEqual(east));
-            if (distribution == null || item.Tricks.First() == -1)
-                continue;
-            rows.Add(new DistributionRow(Show(distribution.West), Show(distribution.East), distribution.Probability, item.Tricks.Max()));
-        }
-        return rows.OrderByDescending(r => r.Probability).ToList();
+        var cardsEW = Utils.GetAllCards().Except(cardsNS).ToArray();
+        return analysis.OutcomesOf(line)
+            .Select(o =>
+            {
+                var east = Utils.StringToCardArray(o.Key);
+                var west = cardsEW.Except(east).ToArray();
+                return (West: Show(west.ConvertToSmallCards(cardsNS)), East: Show(east.ConvertToSmallCards(cardsNS)), o.Value.Probability, o.Value.Tricks);
+            })
+            .GroupBy(r => (r.West, r.East, r.Tricks))
+            .Select(g => new DistributionRow(g.Key.West, g.Key.East, g.Sum(r => r.Probability), g.Key.Tricks))
+            .OrderByDescending(r => r.Probability)
+            .ToList();
     }
 
     private static string Show(Face[] cards) =>

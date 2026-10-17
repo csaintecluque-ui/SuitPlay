@@ -123,6 +123,7 @@ public partial class MainPage
             }
             
             result = await Task.Run(() => Calculate.GetResult2(bestPlay, northHand, southHand, calculateSettings));
+            analysis = await Task.Run(() => SuitAnalysis.Analyse(result, 25));
             StatusLabel.Text = $"Nord : {FrenchText.HandToString(northHand)}    Sud : {FrenchText.HandToString(southHand)}    (calcul en {stopWatch.Elapsed.TotalSeconds:0.0} s)";
             ShowResults();
             EnableButtons(true);
@@ -154,13 +155,9 @@ public partial class MainPage
             return;
         }
 
-        var allTricks = bestPlay.SelectMany(x => x.Value).Select(x => x.Tricks).ToList();
-        guaranteedTricks = allTricks.Min();
-        var maxTricks = allTricks.Max();
-        var tricks = result.PossibleNrOfTricks.Where(x => x > guaranteedTricks).ToList();
-        if (guaranteedTricks > 0)
-            tricks.Add(guaranteedTricks);
-        tricks = tricks.Distinct().OrderByDescending(x => x).ToList();
+        guaranteedTricks = analysis.GuaranteedTricks;
+        var maxTricks = analysis.MaxTricks;
+        var tricks = analysis.Goals.Where(g => g > 0).ToList();
 
         // Tableau des chances : une ligne par objectif
         ResultsGrid.Children.Clear();
@@ -175,8 +172,9 @@ public partial class MainPage
             var chances = goal <= guaranteedTricks ? "100 % (assuré)" : $"{probability * 100:0.0} %";
             AddResultRow(row++, $"Au moins {goal} levée{(goal > 1 ? "s" : "")}", chances, FirstCardText(line));
         }
-        var bestAverage = FrenchText.BestLineFor(result.LineItems, null);
-        AddResultRow(row, "Maximum de levées", $"{bestAverage.Average.Value:0.00} en moyenne", FirstCardText(bestAverage));
+        var bestAverage = analysis.BestAverage();
+        AddResultRow(row++, "Maximum de levées", $"{bestAverage.Average:0.00} en moyenne", FirstCardText(bestAverage.Line));
+        AddResultRow(row, "Matchpoints", "meilleure en face à face", FirstCardText(analysis.MatchpointBest));
 
         // Sélecteur d'objectif
         goals.Clear();
@@ -188,6 +186,8 @@ public partial class MainPage
         }
         goals.Add(null);
         items.Add("Faire le maximum de levées (moyenne)");
+        goals.Add(MatchpointGoal);
+        items.Add("Meilleure ligne en matchpoints");
         GoalPicker.ItemsSource = items;
         GoalPicker.SelectedIndex = 0;
 
@@ -201,18 +201,24 @@ public partial class MainPage
     }
 
     private int guaranteedTricks;
+    private SuitAnalysis analysis;
+    private const int MatchpointGoal = -1;
 
     private LineItem BestLineFor(int? goal)
     {
+        if (goal == MatchpointGoal)
+            return analysis.MatchpointBest;
         return goal == null || goal <= guaranteedTricks
-            ? FrenchText.BestLineFor(result.LineItems, null)
-            : FrenchText.BestLineFor(result.LineItems, goal);
+            ? analysis.BestAverage().Line
+            : analysis.BestFor(goal.Value).Line;
     }
 
     private double ProbabilityFor(LineItem line, int goal)
     {
-        return goal <= guaranteedTricks ? 1.0 : FrenchText.ProbabilityFor(line, goal);
+        return goal <= guaranteedTricks ? 1.0 : LineComparison.ProbabilityAtLeast(analysis.OutcomesOf(line), goal);
     }
+
+    private double AverageOf(LineItem line) => LineComparison.Average(analysis.OutcomesOf(line));
 
     private void AddResultRow(int row, string goal, string chances, string firstCard, bool header = false)
     {
@@ -251,8 +257,10 @@ public partial class MainPage
         if (line == null)
             return;
 
-        GoalSummary.Text = goal == null
-            ? $"Cette ligne rapporte en moyenne {line.Average.Value:0.00} levées."
+        GoalSummary.Text = goal == MatchpointGoal
+            ? $"En matchpoints, cette ligne ne perd contre aucune autre en face à face. Elle rapporte {AverageOf(line):0.00} levées en moyenne."
+            : goal == null
+            ? $"Cette ligne rapporte en moyenne {AverageOf(line):0.00} levées."
             : goal.Value <= guaranteedTricks
                 ? $"{goal} levée{(goal > 1 ? "s" : "")} assurée{(goal > 1 ? "s" : "")} quelle que soit la répartition."
                 : $"Cette ligne réussit dans {ProbabilityFor(line, goal.Value) * 100:0.0} % des cas.";
