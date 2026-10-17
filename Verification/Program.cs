@@ -40,11 +40,18 @@ foreach (var falsecards in new[] { false, true })
         var south = Utils.StringToCardArray(parts[1]);
         var cardsNS = north.Concat(south).OrderDescending().ToArray();
         Result2 result;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss} {name} (fausses cartes {falsecards})");
         try
         {
             var bestPlay = Calculate.CalculateBestPlay(north, south, new MiniMax.MiniMaxSettings { UseFalsecards = falsecards });
             result = Calculate.GetResult2(bestPlay, north, south,
-                new Calculate.CalculateSettings { EtalonsDirectory = etalonsDir, MaxLines = int.MaxValue });
+                new Calculate.CalculateSettings { EtalonsDirectory = etalonsDir, MaxLines = 10000 });
+        }
+        catch (MaxLinesException)
+        {
+            report.AppendLine($"| {name} | trop de lignes | | | non comparé |");
+            continue;
         }
         catch (Exception ex)
         {
@@ -96,10 +103,11 @@ foreach (var falsecards in new[] { false, true })
 
         // Meilleure ligne en matchpoints
         var originalMp = LineComparison.MatchpointBest(originalLines, l => l.Outcomes);
-        var ourMp = LineComparison.MatchpointBest(ourLines, l => l.Outcomes);
+        var ourMp = LineComparison.MatchpointBest(LineComparison.Candidates(ourLines, l => l.Outcomes), l => l.Outcomes);
         var sameMp = ourMp.Any(o => originalMp.Any(s => Utils.IsSameLine(o.Line.Header, s.Key, cardsNS)));
         if (sameMp) mpSame++;
-        mpLines.AppendLine($"| {name} | {string.Join("<br>", originalMp.Select(s => s.Key))} | {string.Join("<br>", ourMp.Select(o => o.Line.Header))} | {(sameMp ? "oui" : "**non**")} |");
+        Console.WriteLine($"   {result.LineItems.Count} lignes, {watch.Elapsed.TotalSeconds:0.0} s");
+        mpLines.AppendLine($"| {name} ({result.LineItems.Count} lignes, {watch.Elapsed.TotalSeconds:0.0} s) | {string.Join("<br>", originalMp.Select(s => s.Key))} | {string.Join("<br>", ourMp.Select(o => o.Line.Header))} | {(sameMp ? "oui" : "**non**")} |");
     }
 
     report.AppendLine();
