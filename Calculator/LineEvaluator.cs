@@ -149,8 +149,9 @@ public static class LineEvaluator
             }
             else
             {
-                // À la défense : elle choisit la réponse la plus gênante
-                var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, settings);
+                // À la défense : elle choisit la réponse la plus gênante, parmi toutes ses cartes
+                // (sans les raccourcis du moteur, qui interdisent parfois de couvrir à tort)
+                var options = DefenderCards(played, initialCards);
                 value = options.Min(card => Play(played, card));
             }
 
@@ -183,6 +184,22 @@ public static class LineEvaluator
                 return sequence[n];
         }
         return null;
+    }
+
+    /// <summary>
+    /// Toutes les cartes que le défenseur à jouer peut fournir, en ne gardant qu'une carte par groupe
+    /// de cartes équivalentes (consécutives face aux cartes de Nord-Sud restantes).
+    /// </summary>
+    private static List<Face> DefenderCards(Cards played, Dictionary<Player, List<Face>> initialCards)
+    {
+        var trick = played.Chunk(4).Last();
+        var leader = initialCards.First(x => x.Value.Contains(trick[0])).Key;
+        var player = (Player)(((int)leader + trick.Length) % 4);
+        var cards = initialCards[player].Except(played.Data).OrderDescending().ToList();
+        if (cards.Count == 0)
+            return [Face.Dummy];
+        var remainingNS = initialCards[Player.North].Concat(initialCards[Player.South]).Except(played.Data).ToList();
+        return MiniMax.AvailableCardsFiltered(cards, remainingNS).ToList();
     }
 
     /// <summary>Cartes que Nord-Sud peuvent légalement jouer maintenant.</summary>
