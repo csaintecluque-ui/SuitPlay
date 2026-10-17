@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          for cfg in false-max false-eval; do
+          for cfg in false-eval; do
             fc=${cfg%-*}; mode=${cfg#*-}
             for f in Calculator/etalons-suitplay/*.json; do
               n=$(basename "$f" .json)
@@ -63,22 +63,25 @@ jobs:
           out = ["# Notre moteur comparé au SuitPlay original", "",
                  f"Généré le {datetime.datetime.utcnow():%Y-%m-%d %H:%M} UTC. Pourcentages = meilleures chances d'atteindre l'objectif.", "", "## Résumé", ""]
           sections = []
-          labels = {"false-max": "calcul actuel de l'appli",
+          labels = {"false-max": "ancien calcul (sans juge)",
                     "false-eval": "nouveau juge : chaque ligne rejouée contre toutes les défenses"}
-          for fc in ("false-max", "false-eval"):
+          for fc in ("false-eval",):
               files = sorted(glob.glob(f"out/{fc}-*.txt"))
-              rows, mps, matches, gaps, mp_same, done = [], [], 0, 0.0, 0, 0
+              rows, mps, chks, matches, gaps, mp_same, done = [], [], [], 0, 0.0, 0, 0
               for f in files:
                   for line in open(f, encoding="utf-8"):
                       line = line.rstrip("\n")
                       if line.startswith("ROW|"): rows.append(line[4:])
                       elif line.startswith("MP|"): mps.append(line[3:])
+                      elif line.startswith("CHK|"): chks.append(line[4:])
                       elif line.startswith("STAT|"):
                           _, m, g, s = line.split("|"); matches += int(m); gaps += float(g); mp_same += int(s); done += 1
               label = labels[fc]
               out.append(f"- {label} : {done}/{len(files)} combinaisons comparées, {matches} objectifs identiques, écart cumulé {gaps*100:.1f} points, meilleure ligne en matchpoints identique {mp_same}/{done}")
               sec = ["", f"## {label}", "", "| Combinaison | Objectif | Original | Nous | Écart |", "|---|---|---|---|---|"] + rows
               sec += ["", "### Meilleure ligne en matchpoints", "", "| Combinaison | Original | Nous | Identique |", "|---|---|---|---|"] + mps
+              if chks:
+                  sec += ["", "### Contrôle du juge sur les lignes de l'original", "", "| Combinaison | Cas comparés | Écarts | Exemples |", "|---|---|---|---|"] + chks
               sections += sec
           open("rapport.md", "w", encoding="utf-8").write("\n".join(out + sections) + "\n")
           PY

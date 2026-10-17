@@ -104,4 +104,34 @@ var ourMp = LineComparison.MatchpointBest(LineComparison.Candidates(ourLines, l 
 var sameMp = ourMp.Any(o => originalMp.Any(s => Utils.IsSameLine(o.Line.Header, s.Key, cardsNS)));
 Console.WriteLine($"MP|| {name} ({result.LineItems.Count} lignes, {watch.Elapsed.TotalSeconds:0.0} s) | {string.Join("<br>", originalMp.Select(s => s.Key))} | {string.Join("<br>", ourMp.Select(o => o.Line.Header))} | {(sameMp ? "oui" : "**non**")} |");
 
+// Contrôle du juge : il évalue les lignes de l'original, comparées aux résultats de l'original
+if (mode == "eval" && result.LineItems.Count > 0)
+{
+    var template = result.LineItems[0];
+    var mismatches = 0;
+    var checkedCount = 0;
+    var examples = new List<string>();
+    foreach (var (key, tricksList) in etalon.lines)
+    {
+        var sequences = key.Split(';', StringSplitOptions.RemoveEmptyEntries).Select(x => new Cards(x)).ToList();
+        if (sequences.Count == 0) continue;
+        var pseudoLine = new LineItem { Line = sequences, Items2 = template.Items2 };
+        var judged = LineEvaluator.Outcomes(pseudoLine, result);
+        // Regroupe par main d'Est en petites cartes (notation de l'original)
+        var judgedByCombo = judged
+            .GroupBy(j => Utils.CardsToString(Utils.StringToCardArray(j.Key).ConvertToSmallCards(cardsNS)))
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Value.Tricks).Distinct().OrderBy(x => x).ToList());
+        for (var i = 0; i < etalon.combinations.Count && i < tricksList.Count; i++)
+        {
+            if (!judgedByCombo.TryGetValue(etalon.combinations[i], out var ours)) continue;
+            checkedCount++;
+            if (ours.Count == 1 && ours[0] == tricksList[i]) continue;
+            mismatches++;
+            if (examples.Count < 6)
+                examples.Add($"{key} / Est {(etalon.combinations[i] == "" ? "—" : etalon.combinations[i])} : original {tricksList[i]}, juge {string.Join(",", ours)}");
+        }
+    }
+    Console.WriteLine($"CHK|| {name} | {checkedCount} | {mismatches} | {string.Join("<br>", examples)} |");
+}
+
 Console.WriteLine($"STAT|{matches}|{gapsTotal.ToString(CultureInfo.InvariantCulture)}|{(sameMp ? 1 : 0)}");
