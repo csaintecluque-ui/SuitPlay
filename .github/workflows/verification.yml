@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          for cfg in true-eval; do
+          for cfg in true-eval true-sd; do
             fc=${cfg%-*}; mode=${cfg#*-}
             for f in Calculator/etalons-suitplay/*.json; do
               n=$(basename "$f" .json)
@@ -65,8 +65,9 @@ jobs:
           sections = []
           labels = {"false-max": "ancien calcul (sans juge)",
                     "false-eval": "juge, sans fausses cartes",
-                    "true-eval": "juge, fausses cartes autorisées pour la défense"}
-          for fc in ("true-eval",):
+                    "true-eval": "juge actuel de l'appli",
+                    "true-sd": "juge + fin de ligne sans voir les cartes (selon l'objectif)"}
+          for fc in ("true-eval", "true-sd"):
               files = sorted(glob.glob(f"out/{fc}-*.txt"))
               rows, mps, chks, matches, gaps, mp_same, done = [], [], [], 0, 0.0, 0, 0
               for f in files:

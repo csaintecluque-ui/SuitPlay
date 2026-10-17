@@ -30,7 +30,7 @@ Result2 result;
 try
 {
     // En mode « juge », les lignes sont générées sans fausses cartes ; le juge, lui, les autorise ou non
-    var bestPlay = Calculate.CalculateBestPlay(north, south, new MiniMax.MiniMaxSettings { UseFalsecards = falsecards && mode != "eval" });
+    var bestPlay = Calculate.CalculateBestPlay(north, south, new MiniMax.MiniMaxSettings { UseFalsecards = falsecards && mode != "eval" && mode != "sd" });
     timeEngine = watch.Elapsed.TotalSeconds;
     result = Calculate.GetResult2(bestPlay, north, south,
         new Calculate.CalculateSettings { EtalonsDirectory = etalonsDir, MaxLines = 10000 });
@@ -82,12 +82,14 @@ if (coverage < 0.9)
 
 // Nos résultats
 var ourLines = result.LineItems.Select(line => (Line: line, Outcomes: LineComparison.Outcomes(line, result, pessimistic))).ToList();
-if (mode == "eval")
+var candidateLines = new List<LineItem>();
+if (mode == "eval" || mode == "sd")
 {
     // Le « juge » rejoue chaque ligne candidate contre toutes les défenses
     var candidates = LineComparison.Candidates(ourLines, l => l.Outcomes, 40);
+    candidateLines = candidates.Select(c => c.Line).ToList();
     var judgeStart = watch.Elapsed.TotalSeconds;
-    ourLines = candidates.Select(c => (c.Line, LineEvaluator.Outcomes(c.Line, result, judgeSettings))).ToList();
+    ourLines = candidates.Select(c => (c.Line, LineEvaluator.Outcomes(c.Line, result, judgeSettings, singleDummy: mode == "sd"))).ToList();
     timeJudge = watch.Elapsed.TotalSeconds - judgeStart;
 }
 
@@ -97,7 +99,9 @@ var maxTricks = Math.Max(
 for (var goal = maxTricks; goal >= 1; goal--)
 {
     var original = originalLines.Max(l => LineComparison.ProbabilityAtLeast(l.Outcomes, goal));
-    var ours = ourLines.Max(l => LineComparison.ProbabilityAtLeast(l.Outcomes, goal));
+    var ours = mode == "sd"
+        ? candidateLines.Max(l => LineComparison.ProbabilityAtLeast(LineEvaluator.Outcomes(l, result, judgeSettings, singleDummy: true, goal: goal), goal))
+        : ourLines.Max(l => LineComparison.ProbabilityAtLeast(l.Outcomes, goal));
     if (original >= 0.9999 && ours >= 0.9999)
         continue;
     var gap = ours - original;
@@ -105,7 +109,7 @@ for (var goal = maxTricks; goal >= 1; goal--)
     var same = Math.Abs(gap) < 0.0005;
     if (same) matches++;
     Row($"| {name} | ≥ {goal} | {Pct(original)} % | {Pct(ours)} % | {(same ? "=" : (gap > 0 ? "+" : "") + Pct(gap))} |");
-    if (!same && mode == "eval")
+    if (!same && (mode == "eval" || mode == "sd"))
     {
         // Détail de notre meilleure ligne, dans la notation de l'original (mains d'Est)
         var best = ourLines.OrderByDescending(l => LineComparison.ProbabilityAtLeast(l.Outcomes, goal)).First();
@@ -131,7 +135,7 @@ var sameMp = ourMp.Any(o => originalMp.Any(s => Utils.IsSameLine(o.Line.Header, 
 Console.WriteLine($"MP|| {name} ({result.LineItems.Count} lignes, {watch.Elapsed.TotalSeconds:0.0} s : moteur {timeEngine:0.0}, lignes {timeLines:0.0} [{string.Join(", ", Calculate.LastTimings.Select(t => $"{t.Key} {t.Value:0.0}"))}], juge {timeJudge:0.0}) | {string.Join("<br>", originalMp.Select(s => s.Key))} | {string.Join("<br>", ourMp.Select(o => o.Line.Header))} | {(sameMp ? "oui" : "**non**")} |");
 
 // Contrôle du juge : il évalue les lignes de l'original, comparées aux résultats de l'original
-if (mode == "eval" && result.LineItems.Count > 0)
+if ((mode == "eval" || mode == "sd") && result.LineItems.Count > 0)
 {
     var template = result.LineItems[0];
     var mismatches = 0;

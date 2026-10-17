@@ -18,30 +18,49 @@ public static class LineEvaluator
     /// (la même carte dans toutes les répartitions qu'il ne peut pas distinguer), comme dans l'original.
     /// false : il termine en voyant les cartes (plus rapide, mais trop optimiste).
     /// </param>
-    public static Dictionary<string, (double Probability, int Tricks)> Outcomes(LineItem line, Result2 result, MiniMax.MiniMaxSettings settings = null, bool singleDummy = false)
+    /// <param name="goal">
+    /// Avec <paramref name="singleDummy"/> : objectif qui guide les choix hors de la ligne
+    /// (null = maximum de levées en moyenne, sinon chances d'atteindre ce nombre de levées).
+    /// </param>
+    public static Dictionary<string, (double Probability, int Tricks)> Outcomes(LineItem line, Result2 result, MiniMax.MiniMaxSettings settings = null,
+        bool singleDummy = false, int? goal = null)
     {
         settings ??= new MiniMax.MiniMaxSettings();
         if (!singleDummy)
-            return EvaluateAll(line, result, settings, null, null);
+            return EvaluateAll(line, result, settings, null, null, null);
 
-        // Complète la ligne pas à pas : à chaque situation non prévue, on retient la carte
-        // qui rapporte le plus de levées en moyenne sur les répartitions indiscernables.
+        Func<int, double> utility = goal == null
+            ? tricks => tricks
+            : tricks => (tricks >= goal.Value ? 1.0 : 0.0) + 0.001 * tricks;
+
+        // Complète la ligne par itérations successives : à chaque situation non prévue par la ligne,
+        // le déclarant retient la carte la meilleure pour l'objectif, en moyenne sur les répartitions
+        // qu'il ne peut pas distinguer ; les choix sont révisés jusqu'à ce qu'ils ne bougent plus.
         var extension = new Dictionary<string, Face>();
         Dictionary<string, (double Probability, int Tricks)> outcomes = null;
-        for (var pass = 0; pass < 8; pass++)
+        for (var pass = 0; pass < 12; pass++)
         {
             var scores = new Dictionary<string, Dictionary<Face, double>>();
-            outcomes = EvaluateAll(line, result, settings, extension, scores);
-            if (scores.Count == 0)
-                break;
+            outcomes = EvaluateAll(line, result, settings, extension, scores, utility);
+            var changed = false;
             foreach (var (history, cardScores) in scores)
-                extension[history] = cardScores.MaxBy(x => x.Value).Key;
+            {
+                var best = cardScores.MaxBy(x => x.Value).Key;
+                if (!extension.TryGetValue(history, out var current) || current != best &&
+                    cardScores[best] > cardScores.GetValueOrDefault(current, double.MinValue) + 1e-12)
+                {
+                    extension[history] = best;
+                    changed = true;
+                }
+            }
+            if (!changed)
+                break;
         }
         return outcomes;
     }
 
     private static Dictionary<string, (double Probability, int Tricks)> EvaluateAll(LineItem line, Result2 result, MiniMax.MiniMaxSettings settings,
-        Dictionary<string, Face> extension, Dictionary<string, Dictionary<Face, double>> scores)
+        Dictionary<string, Face> extension, Dictionary<string, Dictionary<Face, double>> scores, Func<int, double> utility)
     {
         var outcomes = new Dictionary<string, (double, int)>();
         var cardsNS = result.North.Concat(result.South).OrderDescending().ToArray();
@@ -74,7 +93,7 @@ public static class LineEvaluator
                 share = probability / classesByEast[eastKey];
             else
                 continue;
-            var tricks = Evaluate(sequences, result.North, east, result.South, west, cardsNS, settings, extension, scores, share);
+            var tricks = Evaluate(sequences, result.North, east, result.South, west, cardsNS, settings, extension, scores, share, utility);
             outcomes[Utils.CardsToString(east)] = (share, tricks);
         }
         return outcomes;
@@ -82,8 +101,10 @@ public static class LineEvaluator
 
     /// <summary>Levées garanties par la ligne pour une répartition donnée.</summary>
     public static int Evaluate(List<Cards> sequences, Face[] north, Face[] east, Face[] south, Face[] west, Face[] cardsNS, MiniMax.MiniMaxSettings settings,
-        Dictionary<string, Face> extension = null, Dictionary<string, Dictionary<Face, double>> scores = null, double probability = 0)
+        Dictionary<string, Face> extension = null, Dictionary<string, Dictionary<Face, double>> scores = null, double probability = 0,
+        Func<int, double> utility = null)
     {
+        utility ??= tricks => tricks;
         var initialCards = new Dictionary<Player, List<Face>>
         {
             [Player.North] = north.ToList(),
@@ -123,20 +144,22 @@ public static class LineEvaluator
                 else
                 {
                     var visibleKey = played.ConvertToSmallCards(cardsNS).ToString();
-                    if (extension != null && extension.TryGetValue(visibleKey, out var chosen) && legal.Contains(chosen))
+                    var hasChoice = extension != null && extension.TryGetValue(visibleKey, out var chosen) && legal.Contains(chosen);
+                    if (scores != null)
                     {
-                        // Situation déjà tranchée sans voir les cartes adverses
-                        value = Play(played, chosen);
-                    }
-                    else if (scores != null)
-                    {
-                        // On note ce que rapporte chaque carte possible, pour choisir ensuite sans tricher
+                        // On note ce que rapporte chaque carte possible (pour réviser le choix sans tricher),
+                        // mais on joue la carte déjà retenue si elle existe
                         var values = legal.Select(card => (Card: card, Value: Play(played, card))).ToList();
                         if (!scores.TryGetValue(visibleKey, out var cardScores))
                             scores[visibleKey] = cardScores = new Dictionary<Face, double>();
                         foreach (var (card, cardValue) in values)
-                            cardScores[card] = cardScores.GetValueOrDefault(card) + probability * cardValue;
-                        value = values.Max(x => x.Value);
+                            cardScores[card] = cardScores.GetValueOrDefault(card) + probability * utility(cardValue);
+                        value = hasChoice ? values.First(x => x.Card == extension[visibleKey]).Value : values.Max(x => x.Value);
+                    }
+                    else if (hasChoice)
+                    {
+                        // Situation déjà tranchée sans voir les cartes adverses
+                        value = Play(played, extension[visibleKey]);
                     }
                     else
                     {
