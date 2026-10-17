@@ -44,14 +44,20 @@ public class SuitAnalysis
     public static SuitAnalysis Analyse(Result2 result, int perCriterion = 40, MiniMax.MiniMaxSettings settings = null)
     {
         // Le juge laisse toujours la défense fournir de fausses cartes, comme l'original (mesuré : plus proche)
-        var judgeSettings = new MiniMax.MiniMaxSettings { UseFalsecards = true, EntriesNorth = settings?.EntriesNorth };
+        var judgeSettings = new MiniMax.MiniMaxSettings { UseFalsecards = true, EntriesNorth = settings?.EntriesNorth, EntriesSouth = settings?.EntriesSouth };
         var roughLines = result.LineItems.Select(line => (Line: line, Outcomes: LineComparison.Outcomes(line, result))).ToList();
         var candidates = LineComparison.Candidates(roughLines, l => l.Outcomes, perCriterion);
         var judged = candidates
             .Select(c => (Line: c.Line, Outcomes: LineEvaluator.Outcomes(c.Line, result, judgeSettings)))
             .ToList();
-        return new SuitAnalysis(result, judged);
+        return new SuitAnalysis(result, judged) { JudgeSettings = judgeSettings };
     }
+
+    private MiniMax.MiniMaxSettings JudgeSettings { get; init; }
+
+    /// <summary>Déroulement de la ligne contre une main d'Est donnée (clé = main d'Est réelle, comme dans <see cref="OutcomesOf"/>).</summary>
+    public List<Face> PlayOf(LineItem line, string eastKey) =>
+        LineEvaluator.PlayFor(line, Result, Utils.StringToCardArray(eastKey), JudgeSettings);
 
     public Dictionary<string, (double Probability, int Tricks)> OutcomesOf(LineItem line) =>
         Lines.FirstOrDefault(l => l.Line == line).Outcomes ?? new Dictionary<string, (double Probability, int Tricks)>();

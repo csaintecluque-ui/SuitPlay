@@ -118,7 +118,8 @@ public partial class MainPage
             var miniMaxSettings = new MiniMax.MiniMaxSettings
             {
                 UseFalsecards = Preferences.Get(Constants.UseFalsecards, false),
-                EntriesNorth = Preferences.Get(Constants.EnableEntriesNorth, false) ? Preferences.Get(Constants.EntriesNorth, 1) : null
+                EntriesNorth = Preferences.Get(Constants.EnableEntriesNorth, false) ? Preferences.Get(Constants.EntriesNorth, 1) : null,
+                EntriesSouth = Preferences.Get(Constants.EnableEntriesSouth, false) ? Preferences.Get(Constants.EntriesSouth, 1) : null
             };
             bestPlay = await Task.Run(() => Calculate.CalculateBestPlay(northHand, southHand, miniMaxSettings, discardedCards));
             var calculateSettings = new Calculate.CalculateSettings
@@ -137,7 +138,8 @@ public partial class MainPage
             
             result = await Task.Run(() => Calculate.GetResult2(bestPlay, northHand, southHand, calculateSettings));
             analysis = await Task.Run(() => SuitAnalysis.Analyse(result, settings: miniMaxSettings));
-            var entriesText = miniMaxSettings.EntriesNorth is { } entries ? $"    Entrées au mort : {entries}" : "";
+            var entriesText = (miniMaxSettings.EntriesNorth is { } entries ? $"    Entrées en Nord : {entries}" : "") +
+                              (miniMaxSettings.EntriesSouth is { } entriesS ? $"    Entrées en Sud : {entriesS}" : "");
             if (discardedCards.Length > 0)
                 entriesText = $"    Défausses : {FrenchText.HandToString(discardedCards)}" + entriesText;
             StatusLabel.Text = $"Nord : {FrenchText.HandToString(northHand)}    Sud : {FrenchText.HandToString(southHand)}{entriesText}    (calcul en {stopWatch.Elapsed.TotalSeconds:0.0} s)";
@@ -325,6 +327,28 @@ public partial class MainPage
         VariantsText.IsVisible = variants.Count > 0;
         VariantsText.Text = string.Join("\n", variants.Select(v => "• " + v));
         LineSequence.Text = $"Séquence (Nord-Sud et adversaires, x = petite carte) : {FrenchText.SequenceToString(sequence)}";
+        shownLine = line;
+        PlaysText.IsVisible = false;
+        PlaysButton.Text = "Voir le déroulement pour chaque répartition adverse";
+    }
+
+    private LineItem shownLine;
+
+    private void PlaysButton_OnClicked(object sender, EventArgs e)
+    {
+        if (PlaysText.IsVisible)
+        {
+            PlaysText.IsVisible = false;
+            PlaysButton.Text = "Voir le déroulement pour chaque répartition adverse";
+            return;
+        }
+        if (shownLine == null || analysis == null)
+            return;
+        var rows = FrenchText.DistributionPlays(analysis, shownLine);
+        PlaysText.Text = string.Join("\n\n", rows.Select(r =>
+            $"Ouest {r.West}  /  Est {r.East}  —  {r.Probability * 100:0.0} %  —  {r.Tricks} levée{(r.Tricks > 1 ? "s" : "")}\n{r.Play}"));
+        PlaysText.IsVisible = true;
+        PlaysButton.Text = "Masquer le déroulement";
     }
 
     private static Face[] GetHand(HandView handView)

@@ -171,7 +171,7 @@ public static class FrenchText
     /// Variantes de la ligne : que faire quand un adversaire ne fournit pas comme dans la ligne principale
     /// (il fournit un honneur, ou n'a plus de carte dans la couleur). Triées de la plus fréquente à la plus rare.
     /// </summary>
-    public static List<string> DescribeVariants(LineItem line, Result2 result, int maxVariants = 8)
+    public static List<string> DescribeVariants(LineItem line, Result2 result, int maxVariants = int.MaxValue)
     {
         var variants = new List<string>();
         if (line == null || result == null)
@@ -263,4 +263,82 @@ public static class FrenchText
         }
         return variants;
     }
+
+    /// <summary>Une ligne du détail par répartition : mains adverses, probabilité, levées et déroulement.</summary>
+    public record DistributionPlay(string West, string East, double Probability, int Tricks, string Play);
+
+    /// <summary>
+    /// Détail de la ligne pour chaque répartition adverse (regroupées comme le voit le déclarant),
+    /// avec le déroulement joué par le juge pour la répartition la plus probable du groupe.
+    /// </summary>
+    public static List<DistributionPlay> DistributionPlays(SuitAnalysis analysis, LineItem line)
+    {
+        var result = analysis.Result;
+        var cardsNS = result.North.Concat(result.South).OrderDescending().ToArray();
+        var cardsEW = Utils.GetAllCards().Except(cardsNS).Except(result.Discarded ?? []).ToArray();
+        return analysis.OutcomesOf(line)
+            .Select(o =>
+            {
+                var east = Utils.StringToCardArray(o.Key);
+                var west = cardsEW.Except(east).ToArray();
+                return (o.Key, East: east, West: SmallHand(west, cardsNS), EastText: SmallHand(east, cardsNS), o.Value.Probability, o.Value.Tricks);
+            })
+            .GroupBy(r => (r.West, r.EastText, r.Tricks))
+            .Select(g =>
+            {
+                var typical = g.MaxBy(r => r.Probability);
+                var play = analysis.PlayOf(line, typical.Key);
+                return new DistributionPlay(g.Key.West, g.Key.EastText, g.Sum(r => r.Probability), g.Key.Tricks,
+                    DescribePlay(play, result.North, result.South, typical.East));
+            })
+            .OrderByDescending(r => r.Probability)
+            .ToList();
+    }
+
+    private static string SmallHand(Face[] cards, Face[] cardsNS) =>
+        cards.Length == 0 ? "—" : string.Join(" ", cards.ConvertToSmallCards(cardsNS).OrderDescending().Select(ShortName));
+
+    /// <summary>
+    /// Déroulement lisible, levée par levée, avec les vraies cartes :
+    /// « 1. Sud A, Ouest 3, Nord 2, Est R (défense) ».
+    /// </summary>
+    public static string DescribePlay(IList<Face> play, Face[] north, Face[] south, Face[] east)
+    {
+        if (play == null || play.Count == 0)
+            return "";
+        var tricks = new List<string>();
+        var number = 1;
+        foreach (var trick in play.Chunk(4))
+        {
+            if (trick[0] == Face.Dummy)
+                break;
+            var seat = north.Contains(trick[0]) ? 0 : south.Contains(trick[0]) ? 2 : east.Contains(trick[0]) ? 1 : 3;
+            var parts = new List<string>();
+            var best = Face.Dummy;
+            var bestSeat = seat;
+            for (var i = 0; i < trick.Length; i++)
+            {
+                var who = (seat + i) % 4;
+                parts.Add($"{SeatName(who)} {(trick[i] == Face.Dummy ? "défausse" : ShortName(trick[i]))}");
+                if (trick[i] != Face.Dummy && trick[i] > best)
+                {
+                    best = trick[i];
+                    bestSeat = who;
+                }
+            }
+            var winner = trick.Length < 4 ? "" : bestSeat % 2 == 0 ? " (N-S)" : " (défense)";
+            tricks.Add($"{number}. {string.Join(", ", parts)}{winner}");
+            number++;
+        }
+        var remaining = north.Concat(south).Count(c => !play.Contains(c));
+        var text = string.Join("  ·  ", tricks);
+        var blocked = play.Chunk(4).Any(t => t[0] == Face.Dummy);
+        if (remaining > 0)
+            text += blocked
+                ? "  ·  puis plus d'entrée dans la main qui a les cartes restantes"
+                : "  ·  puis la défense n'a plus de carte : Nord-Sud jouent leurs cartes restantes";
+        return text;
+    }
+
+    private static string SeatName(int seat) => seat switch { 0 => "Nord", 1 => "Est", 2 => "Sud", _ => "Ouest" };
 }

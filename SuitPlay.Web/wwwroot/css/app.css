@@ -286,3 +286,6 @@ details.dist summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
     .cards { gap: 5px; }
     .card { font-size: 1.05rem; }
 }
+.distt tr.play td { border-top: none; padding: 0 4px 8px; font-size: .78rem; color: var(--muted); line-height: 1.45; }
+details.more { margin: 0 0 10px; }
+details.more > summary { cursor: pointer; color: var(--muted); font-size: .9rem; margin-bottom: 6px; }

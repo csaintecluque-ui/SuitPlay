@@ -74,7 +74,10 @@
                     <Label x:Name="VariantsTitle" Text="Si la défense ne fournit pas petit" FontAttributes="Bold" IsVisible="False" Margin="0,6,0,0"/>
                     <Label x:Name="VariantsText" LineBreakMode="WordWrap" IsVisible="False"/>
                     <Label x:Name="LineSequence" FontSize="12" TextColor="#ACACAC" LineBreakMode="WordWrap"/>
-                    <Label Text="La ligne décrite suppose que les adversaires fournissent petit ; le détail de chaque répartition est dans « Répartitions »."
+                    <Button x:Name="PlaysButton" Text="Voir le déroulement pour chaque répartition adverse" Clicked="PlaysButton_OnClicked"
+                            HorizontalOptions="Start" Margin="0,8,0,0"/>
+                    <Label x:Name="PlaysText" LineBreakMode="WordWrap" IsVisible="False" FontSize="13"/>
+                    <Label Text="La ligne décrite suppose que les adversaires fournissent petit ; le déroulement ci-dessus montre chaque répartition, cartes réelles, avec la défense la plus gênante."
                            FontSize="11" TextColor="#ACACAC" LineBreakMode="WordWrap"/>
                 </VerticalStackLayout>
             </VerticalStackLayout>

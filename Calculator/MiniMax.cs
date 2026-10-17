@@ -15,6 +15,9 @@ public static class MiniMax
         /// sauf si Nord a remporté la levée précédente dans la couleur.
         /// </summary>
         public int? EntriesNorth { get; init; }
+
+        /// <summary>Nombre d'entrées en Sud pour jouer la couleur depuis Sud ; null = illimité (même règle que pour Nord).</summary>
+        public int? EntriesSouth { get; init; }
     }
 
     /// <summary>
@@ -25,34 +28,49 @@ public static class MiniMax
     {
         var north = initialCards[Player.North].Except(playedCards.Data).ToList();
         var south = initialCards[Player.South].Except(playedCards.Data).ToList();
-        if (NorthMayLead(initialCards, playedCards, settings))
+        var northMay = NorthMayLead(initialCards, playedCards, settings);
+        var southMay = SouthMayLead(initialCards, playedCards, settings);
+        if (northMay && southMay)
             return Math.Max(north.Count, south.Count);
-        if (south.Count == 0)
+        if (!northMay && !southMay)
             return 0;
-        // Sud entame ; si Nord a une carte plus haute que la plus petite de Sud, il prend la main et la garde
-        if (north.Count > 0 && north.Max() > south.Min())
+        var (leader, partner) = northMay ? (north, south) : (south, north);
+        if (leader.Count == 0)
+            return 0;
+        // Le partenaire peut prendre la main s'il a une carte plus haute que la plus petite du meneur, et la garder
+        if (partner.Count > 0 && partner.Max() > leader.Min())
             return Math.Max(north.Count, south.Count);
-        return south.Count;
+        return leader.Count;
     }
 
     /// <summary>Nord peut-il entamer la prochaine levée, compte tenu des entrées disponibles ?</summary>
-    public static bool NorthMayLead(Dictionary<Player, List<Face>> initialCards, Cards playedCards, MiniMaxSettings settings)
+    public static bool NorthMayLead(Dictionary<Player, List<Face>> initialCards, Cards playedCards, MiniMaxSettings settings) =>
+        MayLead(Player.North, settings?.EntriesNorth, initialCards, playedCards);
+
+    /// <summary>Sud peut-il entamer la prochaine levée, compte tenu des entrées disponibles ?</summary>
+    public static bool SouthMayLead(Dictionary<Player, List<Face>> initialCards, Cards playedCards, MiniMaxSettings settings) =>
+        MayLead(Player.South, settings?.EntriesSouth, initialCards, playedCards);
+
+    /// <summary>
+    /// Chaque entame depuis la main coûte une entrée, sauf si cette main a remporté la levée précédente.
+    /// </summary>
+    private static bool MayLead(Player hand, int? entries, Dictionary<Player, List<Face>> initialCards, Cards playedCards)
     {
-        if (settings?.EntriesNorth == null)
+        if (entries == null)
             return true;
-        var tricks = playedCards.Chunk(4).ToList();
         var used = 0;
-        var northWonPrevious = false;
-        foreach (var trick in tricks)
+        var wonPrevious = false;
+        foreach (var trick in playedCards.Chunk(4))
         {
             if (trick.Length == 0 || trick[0] == Face.Dummy)
                 break;
-            if (initialCards[Player.North].Contains(trick[0]) && !northWonPrevious)
+            if (initialCards[hand].Contains(trick[0]) && !wonPrevious)
                 used++;
-            northWonPrevious = trick.Length == 4 && initialCards[Player.North].Contains(trick.Max());
+            wonPrevious = trick.Length == 4 && initialCards[hand].Contains(trick.Max());
         }
-        return northWonPrevious || used < settings.EntriesNorth.Value;
+        return wonPrevious || used < entries.Value;
     }
+
     public static List<Item> CalculateBestPlayForCombination(MiniMaxSettings miniMaxSettings, params IEnumerable<Face>[] cards)
     {
         var tree = new List<Item>();
@@ -162,14 +180,19 @@ public static class MiniMax
             var availableCardsNS = availableCardsNorth.Concat(availableCardsSouth).OrderDescending().ToList();
             if (availableCardsNS.Count == 0)
                 return [Face.Dummy];
-            // Entrées au mort : si Nord ne peut pas entamer, on joue depuis Sud
-            if (!NorthMayLead(initialCards, playedCards, miniMaxSettings))
+            // Entrées : si une main ne peut pas entamer, on joue depuis l'autre
+            var northMay = NorthMayLead(initialCards, playedCards, miniMaxSettings);
+            var southMay = SouthMayLead(initialCards, playedCards, miniMaxSettings);
+            if (!northMay && !southMay)
+                return [Face.Dummy];
+            if (!northMay || !southMay)
             {
-                if (availableCardsSouth.Count == 0)
+                var hand = northMay ? availableCardsNorth : availableCardsSouth;
+                if (hand.Count == 0)
                     return [Face.Dummy];
                 if (cardsEWNotPlayed.Count == 1)
-                    return [availableCardsSouth.Max()];
-                return AvailableCardsFiltered(availableCardsSouth, cardsEWNotPlayed).ToList();
+                    return [hand.Max()];
+                return AvailableCardsFiltered(hand, cardsEWNotPlayed).ToList();
             }
             // Play only high cards when the rest of the tricks is certain
             if (cardsEWNotPlayed.Count == 1)

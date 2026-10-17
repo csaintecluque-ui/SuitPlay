@@ -99,10 +99,26 @@ public static class LineEvaluator
         return outcomes;
     }
 
+    /// <summary>
+    /// Déroulement de la ligne contre une main d'Est donnée (cartes réelles, quatre par levée,
+    /// <see cref="Face.Dummy"/> quand un joueur n'a plus de carte), tel que le juge le joue.
+    /// </summary>
+    public static List<Face> PlayFor(LineItem line, Result2 result, Face[] east, MiniMax.MiniMaxSettings settings = null)
+    {
+        settings ??= new MiniMax.MiniMaxSettings();
+        var cardsNS = result.North.Concat(result.South).OrderDescending().ToArray();
+        var cardsEW = Utils.GetAllCards().Except(cardsNS).Except(result.Discarded ?? []).OrderDescending().ToArray();
+        var sequences = line.Line.Concat(line.GeneratedLines).Where(x => x != null && x.Count() > 0).Distinct().ToList();
+        var west = cardsEW.Except(east).OrderDescending().ToArray();
+        var play = new List<Face>();
+        Evaluate(sequences, result.North, east, result.South, west, cardsNS, settings, principalPlay: play);
+        return play;
+    }
+
     /// <summary>Levées garanties par la ligne pour une répartition donnée.</summary>
     public static int Evaluate(List<Cards> sequences, Face[] north, Face[] east, Face[] south, Face[] west, Face[] cardsNS, MiniMax.MiniMaxSettings settings,
         Dictionary<string, Face> extension = null, Dictionary<string, Dictionary<Face, double>> scores = null, double probability = 0,
-        Func<int, double> utility = null)
+        Func<int, double> utility = null, List<Face> principalPlay = null)
     {
         utility ??= tricks => tricks;
         var initialCards = new Dictionary<Player, List<Face>>
@@ -116,7 +132,55 @@ public static class LineEvaluator
         var cardsEWList = east.Concat(west).OrderDescending().ToList();
         var totalCards = initialCards.Values.Sum(x => x.Count);
         var memo = new Dictionary<string, int>();
-        return Search(new Cards([]));
+        var total = Search(new Cards([]));
+        if (principalPlay != null && extension == null && scores == null)
+            principalPlay.AddRange(Principal());
+        return total;
+
+        // Déroulement retenu par le juge : le déclarant suit la ligne, la défense joue sa meilleure réponse
+        // (à valeur égale, la plus petite carte) ; le calcul est déjà en mémoire, la reconstitution est immédiate.
+        List<Face> Principal()
+        {
+            var played = new Cards([]);
+            while (true)
+            {
+                var count = played.Count();
+                if (played.Count(card => card != Face.Dummy) == totalCards ||
+                    (count > 0 && played.Chunk(4).Last().First() == Face.Dummy) ||
+                    (count % 4 == 0 && !cardsEWList.Except(played.Data).Any()))
+                    break;
+                var position = count % 4;
+                Face chosen;
+                if (position == 0 || position == 2)
+                {
+                    var lineCard = NextCardFromLine(played, sequences, cardsNS);
+                    var legal = LegalCardsNS(played, initialCards, settings);
+                    if (lineCard.HasValue && legal.Contains(lineCard.Value))
+                        chosen = lineCard.Value;
+                    else
+                    {
+                        var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, settings);
+                        if (options.Count == 0) options = legal;
+                        chosen = options.Select(card => (Card: card, Value: Play(played, card)))
+                            .OrderByDescending(x => x.Value).ThenBy(x => x.Card).First().Card;
+                    }
+                }
+                else
+                {
+                    var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, settings);
+                    if (position == 1)
+                    {
+                        var cover = CheapestCover(played, initialCards);
+                        if (cover.HasValue && !options.Contains(cover.Value))
+                            options = options.Append(cover.Value).ToList();
+                    }
+                    chosen = options.Select(card => (Card: card, Value: Play(played, card)))
+                        .OrderBy(x => x.Value).ThenBy(x => x.Card).First().Card;
+                }
+                played.Add(chosen);
+            }
+            return played.Data.ToList();
+        }
 
         int Search(Cards played)
         {
@@ -233,7 +297,8 @@ public static class LineEvaluator
         var south = initialCards[Player.South].Except(played.Data).ToList();
         if (position == 0)
         {
-            var all = (MiniMax.NorthMayLead(initialCards, played, settings) ? north.Concat(south) : south).ToList();
+            var all = (MiniMax.NorthMayLead(initialCards, played, settings) ? north : [])
+                .Concat(MiniMax.SouthMayLead(initialCards, played, settings) ? south : []).ToList();
             return all.Count == 0 ? [Face.Dummy] : all;
         }
         // 3e main : le partenaire de celui qui a entamé

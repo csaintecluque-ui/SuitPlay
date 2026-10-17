@@ -68,7 +68,21 @@
                     <label for="en">Nombre d'entrées en Nord</label>
                     <input id="en" type="number" min="0" max="13" @bind="entriesNorth" />
                 </div>
-                <p class="hint">Jouer la couleur depuis Nord coûte une entrée, sauf si Nord vient de remporter la levée précédente dans la couleur.</p>
+            }
+            <div class="opt-row">
+                <input id="entriesS" type="checkbox" @bind="useEntriesSouth" />
+                <label for="entriesS">Limiter les entrées en main (Sud)</label>
+            </div>
+            @if (useEntriesSouth)
+            {
+                <div class="opt-row">
+                    <label for="es">Nombre d'entrées en Sud</label>
+                    <input id="es" type="number" min="0" max="13" @bind="entriesSouth" />
+                </div>
+            }
+            @if (useEntries || useEntriesSouth)
+            {
+                <p class="hint">Jouer la couleur depuis une main limitée coûte une entrée, sauf si cette main vient de remporter la levée précédente dans la couleur.</p>
             }
             <div class="opt-row">
                 <input id="imp" type="checkbox" @bind="useImp" />
@@ -184,29 +198,42 @@
                 {
                     <h3 class="sub">Si la défense ne fournit pas petit</h3>
                     <ul class="variants">
-                        @foreach (var variant in variants)
+                        @foreach (var variant in variants.Take(6))
                         {
                             <li>@variant</li>
                         }
                     </ul>
+                    @if (variants.Count > 6)
+                    {
+                        <details class="more">
+                            <summary>Autres cas plus rares (@(variants.Count - 6))</summary>
+                            <ul class="variants">
+                                @foreach (var variant in variants.Skip(6))
+                                {
+                                    <li>@variant</li>
+                                }
+                            </ul>
+                        </details>
+                    }
                 }
                 <p class="seq">Séquence (x = petite carte) : @FrenchText.SequenceToString(selectedLine.LongestLineIncludingGenerated)</p>
                 <p class="note">La ligne décrite suppose que les adversaires fournissent petit et que vous pouvez reprendre la main dans la bonne main quand il le faut.</p>
 
                 <details class="dist">
-                    <summary>Détail par répartition adverse</summary>
+                    <summary>Détail et déroulement pour chaque répartition adverse</summary>
                     <table class="distt">
                         <thead><tr><th>Ouest</th><th>Est</th><th class="num">Proba.</th><th class="num">Levées</th></tr></thead>
                         <tbody>
                             @foreach (var row in DistributionRows(selectedLine))
                             {
                                 var target = selectedGoal is > 0 ? selectedGoal.Value : selectedGoal == ImpGoal ? Contract.TricksNeeded : 0;
-                                <tr>
+                                <tr class="main">
                                     <td>@row.West</td>
                                     <td>@row.East</td>
                                     <td class="num">@Pct(row.Probability) %</td>
                                     <td class="num @(target == 0 ? "" : row.Tricks >= target ? "ok" : "ko")">@row.Tricks</td>
                                 </tr>
+                                <tr class="play"><td colspan="4">@row.Play</td></tr>
                             }
                         </tbody>
                     </table>
@@ -233,6 +260,7 @@
     private int vacantEast = 13;
     private bool useFalsecards;
     private bool useEntries;
+    private bool useEntriesSouth;
     private bool useImp;
     private int impLevel = 4;
     private Strain impStrain = Strain.Spades;
@@ -255,6 +283,7 @@
         return $"{c.Level}{strain}{dbl}{(c.Vulnerable ? " vulnérable" : "")}";
     }
     private int entriesNorth = 1;
+    private int entriesSouth = 1;
 
     private bool busy;
     private string approximateNote;
@@ -325,7 +354,8 @@
             var miniMaxSettings = new MiniMax.MiniMaxSettings
             {
                 UseFalsecards = useFalsecards,
-                EntriesNorth = useEntries ? Math.Clamp(entriesNorth, 0, 13) : null
+                EntriesNorth = useEntries ? Math.Clamp(entriesNorth, 0, 13) : null,
+                EntriesSouth = useEntriesSouth ? Math.Clamp(entriesSouth, 0, 13) : null
             };
             bestPlay = Calculate.CalculateBestPlay(north, south, miniMaxSettings, discarded);
             var settings = new Calculate.CalculateSettings { EtalonsDirectory = "/etalons", MaxLines = 10000, Discarded = discarded };
@@ -341,7 +371,8 @@
                 approximateNote = "Combinaison très riche : toutes les lignes de jeu n'ont pas pu être examinées en détail. Les résultats sont une bonne approximation, pas une certitude.";
             else
                 approximateNote = null;
-            var entriesText = miniMaxSettings.EntriesNorth is { } entries ? $"   ·   entrées au mort : {entries}" : "";
+            var entriesText = (miniMaxSettings.EntriesNorth is { } entries ? $"   ·   entrées en Nord : {entries}" : "") +
+                              (miniMaxSettings.EntriesSouth is { } entriesS ? $"   ·   entrées en Sud : {entriesS}" : "");
             var discardText = discarded.Length > 0 ? $"   ·   défausses : {HandText('D')}" : "";
             status = $"Nord : {HandText('N')}   ·   Sud : {HandText('S')}{discardText}{entriesText}   ·   calcul en {Num(watch.Elapsed.TotalSeconds, "0.0")} s";
         }
@@ -448,23 +479,17 @@
         return $"{FrenchText.ShortName(first)} de {hand}";
     }
 
-    private record DistributionRow(string West, string East, double Probability, int Tricks);
+    private LineItem playsLine;
+    private List<FrenchText.DistributionPlay> playsCache;
 
-    private List<DistributionRow> DistributionRows(LineItem line)
+    private List<FrenchText.DistributionPlay> DistributionRows(LineItem line)
     {
-        var cardsNS = result.North.Concat(result.South).OrderDescending().ToArray();
-        var cardsEW = Utils.GetAllCards().Except(cardsNS).ToArray();
-        return analysis.OutcomesOf(line)
-            .Select(o =>
-            {
-                var east = Utils.StringToCardArray(o.Key);
-                var west = cardsEW.Except(east).ToArray();
-                return (West: Show(west.ConvertToSmallCards(cardsNS)), East: Show(east.ConvertToSmallCards(cardsNS)), o.Value.Probability, o.Value.Tricks);
-            })
-            .GroupBy(r => (r.West, r.East, r.Tricks))
-            .Select(g => new DistributionRow(g.Key.West, g.Key.East, g.Sum(r => r.Probability), g.Key.Tricks))
-            .OrderByDescending(r => r.Probability)
-            .ToList();
+        if (!ReferenceEquals(line, playsLine) || playsCache == null)
+        {
+            playsCache = FrenchText.DistributionPlays(analysis, line);
+            playsLine = line;
+        }
+        return playsCache;
     }
 
     private static string Show(Face[] cards) =>
