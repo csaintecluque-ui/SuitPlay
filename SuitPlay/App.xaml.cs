@@ -1,4 +1,4 @@
-﻿using Calculator;
+using Calculator;
 using Serilog;
 
 namespace SuitPlay;
@@ -13,7 +13,7 @@ public partial class App : Application
     
     protected override Window CreateWindow(IActivationState activationState)
     {
-        var window = new Window(new AppShell());
+        var window = new Window(new AppShell()) { Title = "SuitPlay — combinaisons de couleur" };
 
 #if WINDOWS
         window.Width = 800;

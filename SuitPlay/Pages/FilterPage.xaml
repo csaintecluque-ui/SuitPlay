@@ -1,9 +1,10 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewModels="using:SuitPlay.ViewModels"
-             x:Class="SuitPlay.Pages.FilterPage">
+             x:Class="SuitPlay.Pages.FilterPage"
+             Title="Places vacantes">
     <ContentPage.BindingContext>
         <viewModels:FilterViewModel/>
     </ContentPage.BindingContext>
@@ -11,11 +12,11 @@
         <Grid RowDefinitions="auto, auto" ColumnDefinitions="auto, auto, auto, auto, auto" 
               x:DataType="viewModels:FilterViewModel">
             <Switch Grid.Row="0" Grid.Column="0" IsToggled="{Binding EnableVacantPlaces}"/>
-            <Label Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="4" Text="Number of vacant places"/>
-            <Label Grid.Row="1" Grid.Column="1" Text="West"/>
+            <Label Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="4" Text="Tenir compte des places vacantes (nombre de cartes inconnues de chaque adversaire)"/>
+            <Label Grid.Row="1" Grid.Column="1" Text="Ouest"/>
             <Entry Grid.Row="1" Grid.Column="2" Text="{Binding VacantPlacesWest}" 
                    IsEnabled="{Binding EnableVacantPlaces}" Keyboard="Numeric"/>
-            <Label Grid.Row="1" Grid.Column="3" Text="East"/>
+            <Label Grid.Row="1" Grid.Column="3" Text="Est"/>
             <Entry Grid.Row="1" Grid.Column="4" Text="{Binding VacantPlacesEast}" 
                    IsEnabled="{Binding EnableVacantPlaces}" Keyboard="Numeric"/>
         </Grid>

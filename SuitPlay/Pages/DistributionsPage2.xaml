@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -7,7 +7,8 @@
              x:Class="SuitPlay.Pages.DistributionsPage2"
              xmlns:system="clr-namespace:System;assembly=System.Runtime"
              xmlns:models="clr-namespace:Calculator.Models;assembly=Calculator"
-             x:DataType="viewModels:Distributions2ViewModel">
+             x:DataType="viewModels:Distributions2ViewModel"
+             Title="Répartitions">
     <ContentPage.Resources>
         <converters:CardsToStringConverter x:Key="CardsToStringConverter" />
         <converters:ProbabilityConverter x:Key="ProbabilityConverter" />
@@ -27,10 +28,10 @@
             <CollectionView ItemsSource="{Binding Path=DistributionItems}" Grid.Row="1" Grid.Column="0">
                 <CollectionView.Header>
                     <Grid ColumnDefinitions="*,*,*,*">
-                        <Label Text="West" Grid.Column="0" Margin="5"/>
-                        <Label Text="East" Grid.Column="1" Margin="5"/>
-                        <Label Text="Occurrences" Grid.Column="2" Margin="5"></Label>
-                        <Label Text="Probability" Grid.Column="3" Margin="5"></Label>
+                        <Label Text="Ouest" Grid.Column="0" Margin="5"/>
+                        <Label Text="Est" Grid.Column="1" Margin="5"/>
+                        <Label Text="Cas" Grid.Column="2" Margin="5"></Label>
+                        <Label Text="Probabilité" Grid.Column="3" Margin="5"></Label>
                     </Grid>
                 </CollectionView.Header>
                 <CollectionView.ItemTemplate>
@@ -88,11 +89,11 @@
                 </CollectionView>
             </ScrollView>
             <Grid RowDefinitions="auto,auto" Grid.Row="2" Grid.Column="0">
-                <Label Text="Averages" Grid.Row="0" Grid.Column="0"></Label>
+                <Label Text="Moyenne de levées" Grid.Row="0" Grid.Column="0"></Label>
                 <CollectionView ItemsSource="{Binding Path=PossibleNrOfTricks}" Grid.Row="1" Grid.Column="0">
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="system:Int32">
-                            <Label Text="{Binding StringFormat='Probability >={0}'}" FontSize="10"></Label>
+                            <Label Text="{Binding StringFormat='Chances ≥ {0} levées'}" FontSize="10"></Label>
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
                 </CollectionView>

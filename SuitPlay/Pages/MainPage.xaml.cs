@@ -1,7 +1,6 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Calculator;
 using Calculator.Models;
-using MoreLinq;
 using SuitPlay.Services;
 using SuitPlay.ViewModels;
 using SuitPlay.Views;
@@ -98,15 +97,18 @@ public partial class MainPage
         try
         {
             CalculateButton.IsEnabled = false;
-            BestPlay.Text = "Calculating...\nAverage";
+            ResultsPanel.IsVisible = false;
+            StatusLabel.Text = "Calcul en cours…";
             var stopWatch = Stopwatch.StartNew();
             var northHand = GetHand(North);
             var southHand = GetHand(South);
-            var northSouth = northHand.Concat(southHand).OrderDescending().ToArray();
+            if (northHand.Length + southHand.Length == 0)
+            {
+                StatusLabel.Text = "Donnez d'abord des cartes à Nord et à Sud.";
+                return;
+            }
             var miniMaxSettings = new MiniMax.MiniMaxSettings {UseFalsecards = Preferences.Get(Constants.UseFalsecards, false)} ;
             bestPlay = await Task.Run(() => Calculate.CalculateBestPlay(northHand, southHand, miniMaxSettings));
-            var calculateElapsed = stopWatch.Elapsed;
-            stopWatch.Restart();
             var calculateSettings = new Calculate.CalculateSettings
                 { EtalonsDirectory = Path.Combine(FileSystem.Current.AppDataDirectory, "Calculator.etalons_suitplay"), 
                     MaxLines = Preferences.Get(Constants.MaxLinesInCalculate, 10000),
@@ -120,18 +122,20 @@ public partial class MainPage
                 calculateSettings.VacantPlacesEast = Preferences.Get(Constants.VacantPlacesEast, 13);
             }
             
-            result = Calculate.GetResult2(bestPlay, GetHand(North), GetHand(South), calculateSettings);
-            var constructLinesElapsed = stopWatch.Elapsed;
-            BestPlay.Text = $@"{GetBestPlayText(result.LineItems, northSouth)} (Calculate:{calculateElapsed:s\:ff} seconds. Construct lines:{constructLinesElapsed:s\:ff} seconds)";
+            result = await Task.Run(() => Calculate.GetResult2(bestPlay, northHand, southHand, calculateSettings));
+            StatusLabel.Text = $"Nord : {FrenchText.HandToString(northHand)}    Sud : {FrenchText.HandToString(southHand)}    (calcul en {stopWatch.Elapsed.TotalSeconds:0.0} s)";
+            ShowResults();
             EnableButtons(true);
         }
         catch (MaxLinesException)
         {
-            await DisplayAlertAsync("Too many lines", "Too many lines were generated.\nSimplify the combination or increase the value of \"Max lines in calculation\" in the settings.", "OK");
+            StatusLabel.Text = "Calcul interrompu : trop de lignes de jeu.";
+            await DisplayAlertAsync("Trop de lignes de jeu", "Le calcul a généré trop de lignes de jeu.\nSimplifiez la combinaison ou augmentez « Lignes max. dans le calcul » dans les réglages.", "OK");
         }
         catch (Exception exception)
         {
-            await DisplayAlertAsync("Error", exception.Message, "OK");
+            StatusLabel.Text = "Le calcul a échoué.";
+            await DisplayAlertAsync("Erreur", exception.Message, "OK");
         }
         finally
         {
@@ -139,32 +143,93 @@ public partial class MainPage
         }
     }
 
-    private static string GetBestPlayText(List<LineItem> playList, Face[] northSouth)
+    // Objectifs proposés : null = maximum de levées en moyenne, sinon « au moins N levées ».
+    private readonly List<int?> goals = [];
+
+    private void ShowResults()
     {
-        var segmentsNS = northSouth.Segment((item, prevItem, _) => (int)prevItem - (int)item > 1).ToList();
-        var bestPlay = playList.MaxBy(x => x.Average.Value);
-        var textTrickOne = GetTrickText(bestPlay.LongestLineIncludingGenerated.Take(3).ToList());
-        var textTrickTwo = GetTrickText(bestPlay.LongestLineIncludingGenerated.Skip(4).Take(3).ToList());
-        var bestPlayText = $"{textTrickOne.text} {textTrickOne.card}\n" +
-                           $"Then, {textTrickTwo.text} {textTrickTwo.card}\n" +
-                           $"Sequence:{bestPlay.LongestLineIncludingGenerated}\n" +
-                           $"Average tricks:{bestPlay.Average.Value:0.##}";
-        return bestPlayText;
-        
-        (string text, Face card) GetTrickText(List<Face> trick)
+        if (result?.LineItems == null || result.LineItems.Count == 0)
         {
-            if (trick.Count < 1)
-                return ("Trick to short", Face.Dummy);
-            if (segmentsNS.First().Contains(trick[0]))
-                return ("Play the", trick[0]);
-            if (trick.Count == 1)
-                return ("Lead the", trick[0]);
-            if (trick.Count < 3)
-                return ("Trick to short", Face.Dummy);
-            if (segmentsNS.First().Contains(trick[2]))
-                return ("Play the", trick[2]);
-            return trick[0] < trick[2] ? ("Play to the", trick[2]) : ("Run the", trick[0]);
+            StatusLabel.Text += "\nAucune ligne de jeu trouvée.";
+            return;
         }
+
+        var tricks = result.PossibleNrOfTricks.Where(x => x > 0).OrderByDescending(x => x).ToList();
+
+        // Tableau des chances : une ligne par objectif
+        ResultsGrid.Children.Clear();
+        ResultsGrid.RowDefinitions.Clear();
+        AddResultRow(0, "Objectif", "Chances", "Première carte", true);
+        var row = 1;
+        foreach (var goal in tricks)
+        {
+            var line = FrenchText.BestLineFor(result.LineItems, goal);
+            var probability = FrenchText.ProbabilityFor(line, goal);
+            AddResultRow(row++, $"Au moins {goal} levée{(goal > 1 ? "s" : "")}", $"{probability * 100:0.0} %", FirstCardText(line));
+        }
+        var bestAverage = FrenchText.BestLineFor(result.LineItems, null);
+        AddResultRow(row, "Maximum de levées", $"{bestAverage.Average.Value:0.00} en moyenne", FirstCardText(bestAverage));
+
+        // Sélecteur d'objectif
+        goals.Clear();
+        var items = new List<string>();
+        foreach (var goal in tricks)
+        {
+            goals.Add(goal);
+            items.Add($"Faire au moins {goal} levée{(goal > 1 ? "s" : "")}");
+        }
+        goals.Add(null);
+        items.Add("Faire le maximum de levées (moyenne)");
+        GoalPicker.ItemsSource = items;
+        GoalPicker.SelectedIndex = 0;
+
+        ResultsPanel.IsVisible = true;
+        ShowSelectedGoal();
+    }
+
+    private void AddResultRow(int row, string goal, string chances, string firstCard, bool header = false)
+    {
+        ResultsGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        var attributes = header ? FontAttributes.Bold : FontAttributes.None;
+        var labels = new[] { goal, chances, firstCard };
+        for (var column = 0; column < labels.Length; column++)
+        {
+            var label = new Label { Text = labels[column], FontAttributes = attributes };
+            ResultsGrid.Add(label, column, row);
+        }
+    }
+
+    private string FirstCardText(LineItem line)
+    {
+        var sequence = line?.LongestLineIncludingGenerated;
+        if (sequence == null || sequence.Count() == 0)
+            return "";
+        var first = sequence.First();
+        var hand = GetHand(North).Contains(first) ? "Nord" : "Sud";
+        return $"{FrenchText.ShortName(first)} de {hand}";
+    }
+
+    private void GoalPicker_OnSelectedIndexChanged(object sender, EventArgs e)
+    {
+        ShowSelectedGoal();
+    }
+
+    private void ShowSelectedGoal()
+    {
+        if (result == null || GoalPicker.SelectedIndex < 0 || GoalPicker.SelectedIndex >= goals.Count)
+            return;
+
+        var goal = goals[GoalPicker.SelectedIndex];
+        var line = FrenchText.BestLineFor(result.LineItems, goal);
+        if (line == null)
+            return;
+
+        GoalSummary.Text = goal == null
+            ? $"Cette ligne rapporte en moyenne {line.Average.Value:0.00} levées."
+            : $"Cette ligne réussit dans {FrenchText.ProbabilityFor(line, goal.Value) * 100:0.0} % des cas.";
+        var sequence = line.LongestLineIncludingGenerated;
+        LineDescription.Text = FrenchText.DescribeLine(sequence, result.North, result.South);
+        LineSequence.Text = $"Séquence (Nord-Sud et adversaires, x = petite carte) : {FrenchText.SequenceToString(sequence)}";
     }
 
     private static Face[] GetHand(HandView handView)
@@ -180,7 +245,7 @@ public partial class MainPage
         }
         catch (Exception exception)
         {
-            await DisplayAlertAsync("Error", $"{exception.Message}\n{exception.StackTrace}\n", "OK");
+            await DisplayAlertAsync("Erreur", $"{exception.Message}\n{exception.StackTrace}\n", "OK");
         }
     }
     
@@ -192,7 +257,7 @@ public partial class MainPage
         }
         catch (Exception exception)
         {
-            await DisplayAlertAsync("Error", exception.Message, "OK");
+            await DisplayAlertAsync("Erreur", exception.Message, "OK");
         }
     }
 
@@ -204,7 +269,7 @@ public partial class MainPage
         }
         catch (Exception exception)
         {
-            await DisplayAlertAsync("Error", exception.Message, "OK");
+            await DisplayAlertAsync("Erreur", exception.Message, "OK");
         }
     }
 }

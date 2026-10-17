@@ -1,34 +1,35 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewModels="using:SuitPlay.ViewModels"
              x:Class="SuitPlay.Pages.SettingsPage"
-             x:DataType="viewModels:SettingsViewModel">
+             x:DataType="viewModels:SettingsViewModel"
+             Title="Réglages">
     <ContentPage.BindingContext>
         <viewModels:SettingsViewModel />
     </ContentPage.BindingContext>
     <ContentPage.Content>
-        <Grid ColumnDefinitions="200, *" RowDefinitions="auto, auto, auto, auto, auto, auto, auto, auto, auto" Padding="20, 20, 20, 20">
-            <Label Grid.Column="0" Grid.Row="0" Text="Developer mode"></Label>
+        <Grid ColumnDefinitions="300, *" RowDefinitions="auto, auto, auto, auto, auto, auto, auto, auto, auto" Padding="20, 20, 20, 20">
+            <Label Grid.Column="0" Grid.Row="0" Text="Mode développeur"></Label>
             <Switch Grid.Column="1" Grid.Row="0" IsToggled="{Binding DeveloperMode}" />
-            <Label Grid.Column="0" Grid.Row="1" Text="Show Only Lines In SuitPlay"/>
+            <Label Grid.Column="0" Grid.Row="1" Text="Seulement les lignes de SuitPlay"/>
             <Switch Grid.Column="1" Grid.Row="1" IsToggled="{Binding OnlyLinesInSuitPlay}" 
                     IsEnabled="{Binding DeveloperMode}"/>
-            <Label Grid.Column="0" Grid.Row="2" Text="Show Only Combinations In SuitPlay"/>
+            <Label Grid.Column="0" Grid.Row="2" Text="Seulement les combinaisons de SuitPlay"/>
             <Switch Grid.Column="1" Grid.Row="2" IsToggled="{Binding OnlyCombinationsInSuitPlay}" 
                     IsEnabled="{Binding DeveloperMode}"/>
-            <Label Grid.Column="0" Grid.Row="3" Text="Max lines in calculations"></Label>
+            <Label Grid.Column="0" Grid.Row="3" Text="Lignes max. dans le calcul"></Label>
             <Entry Grid.Column="1" Grid.Row="3" Text="{Binding MaxLinesInCalculate}" Keyboard="Numeric" WidthRequest="100" HorizontalOptions="Start"></Entry>
-            <Label Grid.Column="0" Grid.Row="4" Text="Max lines in distributions"></Label>
+            <Label Grid.Column="0" Grid.Row="4" Text="Lignes max. affichées (répartitions)"></Label>
             <Entry Grid.Column="1" Grid.Row="4" Text="{Binding MaxLinesInDistributions}" Keyboard="Numeric" WidthRequest="100" HorizontalOptions="Start"></Entry>
-            <Label Grid.Column="0" Grid.Row="5" Text="Filter inferior lines"></Label>
+            <Label Grid.Column="0" Grid.Row="5" Text="Écarter les lignes inférieures"></Label>
             <Switch Grid.Column="1" Grid.Row="5" IsToggled="{Binding FilterInferiorLines}"/>
-            <Label Grid.Column="0" Grid.Row="6" Text="Remove duplicate lines"></Label>
+            <Label Grid.Column="0" Grid.Row="6" Text="Supprimer les lignes en double"></Label>
             <Switch Grid.Column="1" Grid.Row="6" IsToggled="{Binding RemoveDuplicateLines}"/>
-            <Label Grid.Column="0" Grid.Row="7" Text="Remove transpositions"></Label>
+            <Label Grid.Column="0" Grid.Row="7" Text="Supprimer les transpositions"></Label>
             <Switch Grid.Column="1" Grid.Row="7" IsToggled="{Binding RemoveTranspositions}"/>
-            <Label Grid.Column="0" Grid.Row="8" Text="Use falsecards"></Label>
+            <Label Grid.Column="0" Grid.Row="8" Text="Fausses cartes des adversaires"></Label>
             <Switch Grid.Column="1" Grid.Row="8" IsToggled="{Binding UseFalsecards}"/>
         </Grid>
         
