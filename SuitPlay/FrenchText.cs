@@ -147,37 +147,65 @@ public static class FrenchText
     }
 
     /// <summary>
-    /// Variantes de la ligne : que faire quand un adversaire ne fournit pas la petite carte attendue
-    /// (il fournit un honneur, ou n'a plus de carte dans la couleur).
+    /// Variantes de la ligne : que faire quand un adversaire ne fournit pas comme dans la ligne principale
+    /// (il fournit un honneur, ou n'a plus de carte dans la couleur). Triées de la plus fréquente à la plus rare.
     /// </summary>
-    public static List<string> DescribeVariants(LineItem line, Face[] north, Face[] south, int maxVariants = 8)
+    public static List<string> DescribeVariants(LineItem line, Result2 result, int maxVariants = 8)
     {
         var variants = new List<string>();
-        if (line == null)
+        if (line == null || result == null)
             return variants;
+        var north = result.North;
+        var south = result.South;
+        var cardsNS = north.Concat(south).OrderDescending().ToArray();
         var main = line.LongestLineIncludingGenerated;
-        var others = line.Line.Concat(line.GeneratedLines)
-            .Where(x => x != null && x != main)
-            .Distinct()
-            .OrderBy(x => x.Count())
-            .ToList();
 
-        foreach (var other in others)
+        var probabilities = new Dictionary<string, double>();
+        foreach (var distribution in result.DistributionItems)
         {
-            // Première carte où la variante s'écarte de la ligne principale
-            var index = 0;
-            while (index < other.Count() && index < main.Count() && other[index] == main[index])
-                index++;
-            if (index >= other.Count())
-                continue;
+            var key = Utils.CardsToString(distribution.East);
+            probabilities[key] = probabilities.GetValueOrDefault(key) + distribution.Probability;
+        }
 
+        // Regroupe les jeux réels par « premier écart » avec la ligne principale
+        var groups = new Dictionary<(int Index, Face Card), (double Probability, double BestProbability, Cards Play, HashSet<string> Distributions)>();
+        foreach (var item2 in line.Items2)
+        {
+            if (item2.Items == null || item2.Items.Count == 0)
+                continue;
+            var key = Utils.CardsToString(item2.Combination.ConvertToSmallCards(cardsNS));
+            var probability = probabilities.GetValueOrDefault(key);
+            foreach (var item in item2.Items)
+            {
+                var play = item.Play;
+                var index = 0;
+                while (index < play.Count() && index < main.Count() && play[index] == main[index])
+                    index++;
+                if (index >= play.Count() || index >= main.Count())
+                    continue;
+                var position = index % 4;
+                if (position != 1 && position != 3)
+                    continue; // seules les cartes des adversaires créent une variante
+                var groupKey = (index, play[index]);
+                if (!groups.TryGetValue(groupKey, out var group))
+                    group = (0, -1, play, new HashSet<string>());
+                if (group.Distributions.Add(key))
+                    group.Probability += probability;
+                if (probability > group.BestProbability || (probability == group.BestProbability && play.Count() > group.Play.Count()))
+                {
+                    group.BestProbability = probability;
+                    group.Play = play;
+                }
+                groups[groupKey] = group;
+            }
+        }
+
+        foreach (var ((index, card), group) in groups.OrderByDescending(g => g.Value.Probability))
+        {
+            var play = group.Play;
             var trickNumber = index / 4;
             var position = index % 4;
-            var card = other[index];
-            if (position != 1 && position != 3)
-                continue; // seules les cartes des adversaires créent une variante
-
-            var tricks = other.Chunk(4).ToList();
+            var tricks = play.Chunk(4).ToList();
             var trick = tricks[trickNumber];
             var leadFromNorth = north.Contains(trick[0]);
             var who = position == 1 ? (leadFromNorth ? "Est" : "Ouest") : (leadFromNorth ? "Ouest" : "Est");
@@ -187,7 +215,7 @@ public static class FrenchText
                     ? $"Si {who} fournit petit à la levée {trickNumber + 1}"
                     : $"Si {who} fournit {CardName(card)} à la levée {trickNumber + 1}";
 
-            var played = new HashSet<Face>(other.Take(trickNumber * 4).Where(c => c != Face.SmallCard && c != Face.Dummy));
+            var played = new HashSet<Face>(play.Take(trickNumber * 4).Where(c => c != Face.SmallCard && c != Face.Dummy));
             var steps = new List<string>();
             if (position == 1 && trick.Length >= 3 && trick[2] != Face.Dummy)
                 steps.Add($"mettez {CardName(trick[2])} de {(leadFromNorth ? "Sud" : "Nord")}");
@@ -203,9 +231,10 @@ public static class FrenchText
                     played.Add(c);
             }
             if (steps.Count == 0)
-                steps.Add("la suite ne change pas");
+                steps.Add("rien ne change, continuez la ligne");
 
-            var text = $"{condition} : {string.Join(", puis ", steps)}.";
+            var percent = (group.Probability * 100).ToString(group.Probability < 0.01 ? "0.0" : "0", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',');
+            var text = $"{condition} (≈ {percent} % des cas) : {string.Join(", puis ", steps)}.";
             if (!variants.Contains(text))
                 variants.Add(text);
             if (variants.Count >= maxVariants)

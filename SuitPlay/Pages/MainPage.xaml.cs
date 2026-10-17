@@ -258,7 +258,7 @@ public partial class MainPage
                 : $"Cette ligne réussit dans {ProbabilityFor(line, goal.Value) * 100:0.0} % des cas.";
         var sequence = line.LongestLineIncludingGenerated;
         LineDescription.Text = FrenchText.DescribeLine(sequence, result.North, result.South);
-        var variants = FrenchText.DescribeVariants(line, result.North, result.South);
+        var variants = FrenchText.DescribeVariants(line, result);
         VariantsTitle.IsVisible = variants.Count > 0;
         VariantsText.IsVisible = variants.Count > 0;
         VariantsText.Text = string.Join("\n", variants.Select(v => "• " + v));
