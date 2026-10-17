@@ -1,0 +1,47 @@
+# Compile la version web (PWA) et la publie sur la branche gh-pages (GitHub Pages)
+name: Publier la version web
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "master" ]
+    paths:
+      - "SuitPlay.Web/**"
+      - "Calculator/**"
+      - "SuitPlay/FrenchText.cs"
+      - ".github/workflows/web.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Installer .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Compiler la version web
+        shell: bash
+        run: |
+          set -o pipefail
+          dotnet publish SuitPlay.Web/SuitPlay.Web.csproj -c Release -o out 2>&1 | tee build.log || {
+            grep -E ": error " build.log | sed -E 's/^.*: error /error /' | sort -u | head -10 | sed 's/^/::error::/'
+            exit 1
+          }
+
+      - name: Publier sur la branche gh-pages
+        shell: bash
+        run: |
+          cd out/wwwroot
+          touch .nojekyll
+          cp index.html 404.html
+          git init -q
+          git checkout -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -q -m "Publication de la version web"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages

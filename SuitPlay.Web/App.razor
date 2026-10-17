@@ -1,0 +1,343 @@
+@* SuitPlay — version web (PWA) : même moteur de calcul que la version Windows *@
+
+<div class="app">
+    <header class="top">
+        <h1>SuitPlay</h1>
+        <p>Meilleur maniement d'une couleur au bridge</p>
+    </header>
+
+    <section class="panel">
+        <h2>Les cartes de la couleur</h2>
+        <p class="hint">Choisissez la main, puis touchez les cartes à lui donner. Touchez à nouveau une carte pour la retirer.</p>
+
+        <div class="seg">
+            <button class="@(currentHand == 'N' ? "on-n" : "")" @onclick="@(() => currentHand = 'N')">Donner à Nord</button>
+            <button class="@(currentHand == 'S' ? "on-s" : "")" @onclick="@(() => currentHand = 'S')">Donner à Sud</button>
+        </div>
+
+        <div class="cards">
+            @foreach (var face in AllFaces)
+            {
+                var owner = Owner(face);
+                <button class="card @(owner == 'N' ? "n" : owner == 'S' ? "s" : "")" @onclick="@(() => Toggle(face))"
+                        aria-label="@FrenchText.CardName(face)">
+                    @FrenchText.ShortName(face)
+                    @if (owner != null)
+                    {
+                        <span class="tag">@(owner == 'N' ? "NORD" : "SUD")</span>
+                    }
+                </button>
+            }
+        </div>
+
+        <div class="hands">
+            <div class="hand n"><b>Nord</b><span>@HandText('N')</span></div>
+            <div class="hand s"><b>Sud</b><span>@HandText('S')</span></div>
+        </div>
+
+        <details class="options">
+            <summary>Options avancées</summary>
+            <div class="opt-row">
+                <input id="vacant" type="checkbox" @bind="useVacantPlaces" />
+                <label for="vacant">Tenir compte des places vacantes</label>
+            </div>
+            @if (useVacantPlaces)
+            {
+                <p class="hint">Nombre de cartes inconnues dans chaque main adverse (13 au départ, moins les cartes déjà connues, par exemple une longue couleur annoncée).</p>
+                <div class="opt-row">
+                    <label for="vw">Ouest</label>
+                    <input id="vw" type="number" min="0" max="13" @bind="vacantWest" />
+                    <label for="ve">Est</label>
+                    <input id="ve" type="number" min="0" max="13" @bind="vacantEast" />
+                </div>
+            }
+            <div class="opt-row">
+                <input id="false" type="checkbox" @bind="useFalsecards" />
+                <label for="false">Les adversaires peuvent fournir de fausses cartes</label>
+            </div>
+        </details>
+
+        <div class="actions">
+            <button class="btn" @onclick="Reset">Effacer</button>
+            <button class="btn primary" @onclick="CalculateAsync" disabled="@(busy || CardsOf('N').Length + CardsOf('S').Length == 0)">
+                @(busy ? "Calcul en cours…" : "Calculer")
+            </button>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrEmpty(status))
+    {
+        <p class="status @(isError ? "error" : "")">@status</p>
+    }
+
+    @if (result != null && !busy)
+    {
+        <section class="panel" id="resultats">
+            <h2>Chances de réussite selon l'objectif</h2>
+            <table class="goals">
+                <thead><tr><th>Objectif</th><th>Chances</th><th>1re carte</th></tr></thead>
+                <tbody>
+                    <tr class="impossible"><td>@(maxTricks + 1) levées ou plus</td><td class="pct">impossible</td><td></td></tr>
+                    @foreach (var goal in goalTricks)
+                    {
+                        var line = BestLineFor(goal);
+                        <tr>
+                            <td>Au moins @goal levée@(goal > 1 ? "s" : "")</td>
+                            <td class="pct">@(goal <= guaranteedTricks ? "100 % (assuré)" : Pct(ProbabilityFor(line, goal)) + " %")</td>
+                            <td class="first">@FirstCard(line)</td>
+                        </tr>
+                    }
+                    <tr>
+                        <td>Maximum de levées</td>
+                        <td class="pct">@Num(BestLineFor(null).Average.Value, "0.00") en moy.</td>
+                        <td class="first">@FirstCard(BestLineFor(null))</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="panel">
+            <h2>Ligne de jeu conseillée</h2>
+            <select class="goal" @bind="selectedGoalIndex">
+                @for (var i = 0; i < goalOptions.Count; i++)
+                {
+                    <option value="@i">@GoalLabel(goalOptions[i])</option>
+                }
+            </select>
+
+            @{
+                var selectedGoal = SelectedGoal;
+                var selectedLine = BestLineFor(selectedGoal);
+            }
+            @if (selectedLine != null)
+            {
+                <p class="summary">@SummaryText(selectedGoal, selectedLine)</p>
+                <ol class="steps">
+                    @foreach (var step in Steps(selectedLine))
+                    {
+                        <li>@step</li>
+                    }
+                </ol>
+                <p class="seq">Séquence (x = petite carte) : @FrenchText.SequenceToString(selectedLine.LongestLineIncludingGenerated)</p>
+                <p class="note">La ligne décrite suppose que les adversaires fournissent petit et que vous pouvez reprendre la main dans la bonne main quand il le faut.</p>
+
+                <details class="dist">
+                    <summary>Détail par répartition adverse</summary>
+                    <table class="distt">
+                        <thead><tr><th>Ouest</th><th>Est</th><th class="num">Proba.</th><th class="num">Levées</th></tr></thead>
+                        <tbody>
+                            @foreach (var row in DistributionRows(selectedLine))
+                            {
+                                var target = selectedGoal ?? 0;
+                                <tr>
+                                    <td>@row.West</td>
+                                    <td>@row.East</td>
+                                    <td class="num">@Pct(row.Probability) %</td>
+                                    <td class="num @(selectedGoal == null ? "" : row.Tricks >= target ? "ok" : "ko")">@row.Tricks</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </details>
+            }
+        </section>
+    }
+
+    <p class="foot">Moteur de calcul : projet SuitPlay de Yke Smit · usage familial</p>
+</div>
+
+@code {
+    private static readonly Face[] AllFaces =
+    [
+        Face.Ace, Face.King, Face.Queen, Face.Jack, Face.Ten, Face.Nine, Face.Eight,
+        Face.Seven, Face.Six, Face.Five, Face.Four, Face.Three, Face.Two
+    ];
+
+    private readonly Dictionary<Face, char> owners = new();
+    private char currentHand = 'N';
+
+    private bool useVacantPlaces;
+    private int vacantWest = 13;
+    private int vacantEast = 13;
+    private bool useFalsecards;
+
+    private bool busy;
+    private string status;
+    private bool isError;
+
+    private Result2 result;
+    private IDictionary<Face[], List<Item>> bestPlay;
+    private int guaranteedTricks;
+    private int maxTricks;
+    private List<int> goalTricks = [];
+    private List<int?> goalOptions = [];
+    private int selectedGoalIndex;
+
+    private int? SelectedGoal =>
+        selectedGoalIndex >= 0 && selectedGoalIndex < goalOptions.Count ? goalOptions[selectedGoalIndex] : null;
+
+    private char? Owner(Face face) => owners.TryGetValue(face, out var owner) ? owner : null;
+
+    private void Toggle(Face face)
+    {
+        if (owners.TryGetValue(face, out var owner) && owner == currentHand)
+            owners.Remove(face);
+        else
+            owners[face] = currentHand;
+        ClearResult();
+    }
+
+    private Face[] CardsOf(char hand) =>
+        owners.Where(x => x.Value == hand).Select(x => x.Key).OrderDescending().ToArray();
+
+    private string HandText(char hand)
+    {
+        var cards = CardsOf(hand);
+        return cards.Length == 0 ? "—" : string.Join(" ", cards.Select(FrenchText.ShortName));
+    }
+
+    private void Reset()
+    {
+        owners.Clear();
+        currentHand = 'N';
+        ClearResult();
+    }
+
+    private void ClearResult()
+    {
+        result = null;
+        status = null;
+        isError = false;
+    }
+
+    private async Task CalculateAsync()
+    {
+        var north = CardsOf('N');
+        var south = CardsOf('S');
+        busy = true;
+        isError = false;
+        status = "Calcul en cours…";
+        StateHasChanged();
+        await Task.Delay(40); // laisse le navigateur afficher « Calcul en cours »
+
+        try
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            bestPlay = Calculate.CalculateBestPlay(north, south, new MiniMax.MiniMaxSettings { UseFalsecards = useFalsecards });
+            var settings = new Calculate.CalculateSettings { EtalonsDirectory = "/etalons", MaxLines = 10000 };
+            if (useVacantPlaces)
+            {
+                settings.VacantPlacesWest = Math.Clamp(vacantWest, 0, 13);
+                settings.VacantPlacesEast = Math.Clamp(vacantEast, 0, 13);
+            }
+            result = Calculate.GetResult2(bestPlay, north, south, settings);
+            PrepareGoals();
+            status = $"Nord : {HandText('N')}   ·   Sud : {HandText('S')}   ·   calcul en {Num(watch.Elapsed.TotalSeconds, "0.0")} s";
+        }
+        catch (MaxLinesException)
+        {
+            result = null;
+            isError = true;
+            status = "Trop de lignes de jeu à examiner : simplifiez la combinaison.";
+        }
+        catch (Exception ex)
+        {
+            result = null;
+            isError = true;
+            status = "Le calcul a échoué : " + ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void PrepareGoals()
+    {
+        if (result?.LineItems == null || result.LineItems.Count == 0)
+        {
+            result = null;
+            isError = true;
+            status = "Aucune ligne de jeu trouvée pour cette combinaison.";
+            return;
+        }
+
+        var allTricks = bestPlay.SelectMany(x => x.Value).Select(x => x.Tricks).ToList();
+        guaranteedTricks = allTricks.Min();
+        maxTricks = allTricks.Max();
+        var tricks = result.PossibleNrOfTricks.Where(x => x > guaranteedTricks).ToList();
+        if (guaranteedTricks > 0)
+            tricks.Add(guaranteedTricks);
+        goalTricks = tricks.Distinct().OrderByDescending(x => x).ToList();
+
+        goalOptions = goalTricks.Select(x => (int?)x).ToList();
+        goalOptions.Add(null);
+        selectedGoalIndex = 0;
+    }
+
+    private LineItem BestLineFor(int? goal) =>
+        goal == null || goal <= guaranteedTricks
+            ? FrenchText.BestLineFor(result.LineItems, null)
+            : FrenchText.BestLineFor(result.LineItems, goal);
+
+    private double ProbabilityFor(LineItem line, int goal) =>
+        goal <= guaranteedTricks ? 1.0 : FrenchText.ProbabilityFor(line, goal);
+
+    private static string GoalLabel(int? goal) =>
+        goal == null ? "Faire le maximum de levées (moyenne)" : $"Faire au moins {goal} levée{(goal > 1 ? "s" : "")}";
+
+    private string SummaryText(int? goal, LineItem line)
+    {
+        if (goal == null)
+            return $"Cette ligne rapporte en moyenne {Num(line.Average.Value, "0.00")} levées.";
+        if (goal <= guaranteedTricks)
+            return $"{goal} levée{(goal > 1 ? "s" : "")} assurée{(goal > 1 ? "s" : "")} quelle que soit la répartition.";
+        return $"Cette ligne réussit dans {Pct(ProbabilityFor(line, goal.Value))} % des cas.";
+    }
+
+    private IEnumerable<string> Steps(LineItem line)
+    {
+        var text = FrenchText.DescribeLine(line.LongestLineIncludingGenerated, result.North, result.South);
+        foreach (var raw in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var sentence = raw.Trim();
+            var dot = sentence.IndexOf(". ", StringComparison.Ordinal);
+            yield return dot > 0 && dot <= 3 ? sentence[(dot + 2)..] : sentence;
+        }
+    }
+
+    private string FirstCard(LineItem line)
+    {
+        var sequence = line?.LongestLineIncludingGenerated;
+        if (sequence == null || sequence.Count() == 0)
+            return "";
+        var first = sequence.First();
+        var hand = result.North.Contains(first) ? "Nord" : "Sud";
+        return $"{FrenchText.ShortName(first)} de {hand}";
+    }
+
+    private record DistributionRow(string West, string East, double Probability, int Tricks);
+
+    private List<DistributionRow> DistributionRows(LineItem line)
+    {
+        var cardsNS = result.North.Concat(result.South).OrderDescending().ToArray();
+        var rows = new List<DistributionRow>();
+        foreach (var item in line.Items2)
+        {
+            var east = item.Combination.ConvertToSmallCards(cardsNS);
+            var distribution = result.DistributionItems.FirstOrDefault(d => d.East.SequenceEqual(east));
+            if (distribution == null || item.Tricks.First() == -1)
+                continue;
+            rows.Add(new DistributionRow(Show(distribution.West), Show(distribution.East), distribution.Probability, item.Tricks.Max()));
+        }
+        return rows.OrderByDescending(r => r.Probability).ToList();
+    }
+
+    private static string Show(Face[] cards) =>
+        cards.Length == 0 ? "—" : string.Join(" ", cards.OrderDescending().Select(FrenchText.ShortName));
+
+    private static string Pct(double value) => Num(value * 100, "0.0");
+
+    private static string Num(double value, string format) =>
+        value.ToString(format, CultureInfo.InvariantCulture).Replace('.', ',');
+}

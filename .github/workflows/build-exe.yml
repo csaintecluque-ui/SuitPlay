@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
   push:
     branches: [ "master" ]
+    paths-ignore:
+      - "SuitPlay.Web/**"
+      - ".github/workflows/web.yml"
 
 jobs:
   build:
