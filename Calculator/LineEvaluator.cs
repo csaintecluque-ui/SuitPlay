@@ -11,6 +11,8 @@ namespace Calculator;
 /// </summary>
 public static class LineEvaluator
 {
+    /// <summary>Diagnostic : choix retenus hors de la ligne lors du dernier calcul « sans voir les cartes ».</summary>
+    public static Dictionary<string, Face> LastExtension { get; private set; }
 
     /// <summary>Levées garanties par la ligne pour chaque répartition (clé = main d'Est réelle).</summary>
     /// <param name="singleDummy">
@@ -23,15 +25,16 @@ public static class LineEvaluator
     /// (null = maximum de levées en moyenne, sinon chances d'atteindre ce nombre de levées).
     /// </param>
     public static Dictionary<string, (double Probability, int Tricks)> Outcomes(LineItem line, Result2 result, MiniMax.MiniMaxSettings settings = null,
-        bool singleDummy = false, int? goal = null)
+        bool singleDummy = false, int? goal = null, bool guessesOnly = false, JudgeCache cache = null)
     {
         settings ??= new MiniMax.MiniMaxSettings();
         if (!singleDummy)
-            return EvaluateAll(line, result, settings, null, null, null);
+            return EvaluateAll(line, result, settings, null, null, null, null, null, cache);
 
         Func<int, double> utility = goal == null
             ? tricks => tricks
             : tricks => (tricks >= goal.Value ? 1.0 : 0.0) + 0.001 * tricks;
+        Func<int, int> primary = goal == null ? tricks => tricks : tricks => tricks >= goal.Value ? 1 : 0;
 
         // Complète la ligne par itérations successives : à chaque situation non prévue par la ligne,
         // le déclarant retient la carte la meilleure pour l'objectif, en moyenne sur les répartitions
@@ -41,10 +44,19 @@ public static class LineEvaluator
         for (var pass = 0; pass < 12; pass++)
         {
             var scores = new Dictionary<string, Dictionary<Face, double>>();
-            outcomes = EvaluateAll(line, result, settings, extension, scores, utility);
+            var suboptimal = guessesOnly ? new Dictionary<string, HashSet<Face>>() : null;
+            outcomes = EvaluateAll(line, result, settings, extension, scores, utility, suboptimal, primary);
             var changed = false;
             foreach (var (history, cardScores) in scores)
             {
+                // Variante « seulement les vrais choix » : si une même carte est la meilleure dans toutes les répartitions
+                // possibles, le déclarant n'a rien à deviner et termine au mieux
+                if (suboptimal != null && cardScores.Keys.Any(card => !suboptimal[history].Contains(card)))
+                {
+                    if (extension.Remove(history))
+                        changed = true;
+                    continue;
+                }
                 var best = cardScores.MaxBy(x => x.Value).Key;
                 if (!extension.TryGetValue(history, out var current) || current != best &&
                     cardScores[best] > cardScores.GetValueOrDefault(current, double.MinValue) + 1e-12)
@@ -56,11 +68,13 @@ public static class LineEvaluator
             if (!changed)
                 break;
         }
+        LastExtension = extension;
         return outcomes;
     }
 
     private static Dictionary<string, (double Probability, int Tricks)> EvaluateAll(LineItem line, Result2 result, MiniMax.MiniMaxSettings settings,
-        Dictionary<string, Face> extension, Dictionary<string, Dictionary<Face, double>> scores, Func<int, double> utility)
+        Dictionary<string, Face> extension, Dictionary<string, Dictionary<Face, double>> scores, Func<int, double> utility,
+        Dictionary<string, HashSet<Face>> suboptimal, Func<int, int> primary, JudgeCache cache = null)
     {
         var outcomes = new Dictionary<string, (double, int)>();
         var cardsNS = result.North.Concat(result.South).OrderDescending().ToArray();
@@ -93,7 +107,8 @@ public static class LineEvaluator
                 share = probability / classesByEast[eastKey];
             else
                 continue;
-            var tricks = Evaluate(sequences, result.North, east, result.South, west, cardsNS, settings, extension, scores, share, utility);
+            var tricks = Evaluate(sequences, result.North, east, result.South, west, cardsNS, settings, extension, scores, share, utility,
+                suboptimal: suboptimal, primary: primary, tailCache: cache?.For(east));
             outcomes[Utils.CardsToString(east)] = (share, tricks);
         }
         return outcomes;
@@ -103,7 +118,7 @@ public static class LineEvaluator
     /// Déroulement de la ligne contre une main d'Est donnée (cartes réelles, quatre par levée,
     /// <see cref="Face.Dummy"/> quand un joueur n'a plus de carte), tel que le juge le joue.
     /// </summary>
-    public static List<Face> PlayFor(LineItem line, Result2 result, Face[] east, MiniMax.MiniMaxSettings settings = null)
+    public static List<Face> PlayFor(LineItem line, Result2 result, Face[] east, MiniMax.MiniMaxSettings settings = null, JudgeCache cache = null)
     {
         settings ??= new MiniMax.MiniMaxSettings();
         var cardsNS = result.North.Concat(result.South).OrderDescending().ToArray();
@@ -111,16 +126,20 @@ public static class LineEvaluator
         var sequences = line.Line.Concat(line.GeneratedLines).Where(x => x != null && x.Count() > 0).Distinct().ToList();
         var west = cardsEW.Except(east).OrderDescending().ToArray();
         var play = new List<Face>();
-        Evaluate(sequences, result.North, east, result.South, west, cardsNS, settings, principalPlay: play);
+        Evaluate(sequences, result.North, east, result.South, west, cardsNS, settings, principalPlay: play, tailCache: cache?.For(east));
         return play;
     }
 
     /// <summary>Levées garanties par la ligne pour une répartition donnée.</summary>
     public static int Evaluate(List<Cards> sequences, Face[] north, Face[] east, Face[] south, Face[] west, Face[] cardsNS, MiniMax.MiniMaxSettings settings,
         Dictionary<string, Face> extension = null, Dictionary<string, Dictionary<Face, double>> scores = null, double probability = 0,
-        Func<int, double> utility = null, List<Face> principalPlay = null)
+        Func<int, double> utility = null, List<Face> principalPlay = null,
+        Dictionary<string, HashSet<Face>> suboptimal = null, Func<int, int> primary = null, Dictionary<string, int> tailCache = null)
     {
         utility ??= tricks => tricks;
+        // Une fois la ligne épuisée (plus aucune séquence ne prolonge la situation), la suite ne dépend plus de la ligne :
+        // sa valeur est partagée entre toutes les lignes jugées pour cette répartition
+        var shareTails = tailCache != null && extension == null && scores == null;
         var initialCards = new Dictionary<Player, List<Face>>
         {
             [Player.North] = north.ToList(),
@@ -167,13 +186,7 @@ public static class LineEvaluator
                 }
                 else
                 {
-                    var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, settings);
-                    if (position == 1)
-                    {
-                        var cover = CheapestCover(played, initialCards);
-                        if (cover.HasValue && !options.Contains(cover.Value))
-                            options = options.Append(cover.Value).ToList();
-                    }
+                    var options = DefenceOptions(played, initialCards, cardsEWList, cardsNSList, cardsNS, settings);
                     chosen = options.Select(card => (Card: card, Value: Play(played, card)))
                         .OrderBy(x => x.Value).ThenBy(x => x.Card).First().Card;
                 }
@@ -182,7 +195,7 @@ public static class LineEvaluator
             return played.Data.ToList();
         }
 
-        int Search(Cards played)
+        int Search(Cards played, bool offline = false)
         {
             var count = played.Count();
             if (played.Count(card => card != Face.Dummy) == totalCards ||
@@ -193,7 +206,8 @@ public static class LineEvaluator
                        MiniMax.RemainingNSTricks(initialCards, played, settings);
 
             var memoKey = played.ToString();
-            if (memo.TryGetValue(memoKey, out var known))
+            var cache = offline && shareTails ? tailCache : memo;
+            if (cache.TryGetValue(memoKey, out var known))
                 return known;
 
             var position = count % 4;
@@ -201,7 +215,15 @@ public static class LineEvaluator
             if (position == 0 || position == 2)
             {
                 // Au déclarant : il suit la ligne si elle prévoit ce cas
-                var lineCard = NextCardFromLine(played, sequences, cardsNS);
+                var lineCard = offline ? null : NextCardFromLine(played, sequences, cardsNS);
+                if (offline && shareTails)
+                {
+                    var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, settings);
+                    if (options.Count == 0) options = LegalCardsNS(played, initialCards, settings);
+                    value = options.Max(card => Play(played, card, true));
+                    tailCache[memoKey] = value;
+                    return value;
+                }
                 var legal = LegalCardsNS(played, initialCards, settings);
                 if (lineCard.HasValue && legal.Contains(lineCard.Value))
                     value = Play(played, lineCard.Value);
@@ -218,6 +240,15 @@ public static class LineEvaluator
                             scores[visibleKey] = cardScores = new Dictionary<Face, double>();
                         foreach (var (card, cardValue) in values)
                             cardScores[card] = cardScores.GetValueOrDefault(card) + probability * utility(cardValue);
+                        if (suboptimal != null)
+                        {
+                            if (!suboptimal.TryGetValue(visibleKey, out var worse))
+                                suboptimal[visibleKey] = worse = [];
+                            var bestPrimary = values.Max(x => primary(x.Value));
+                            foreach (var (card, cardValue) in values)
+                                if (primary(cardValue) < bestPrimary)
+                                    worse.Add(card);
+                        }
                         value = hasChoice ? values.First(x => x.Card == extension[visibleKey]).Value : values.Max(x => x.Value);
                     }
                     else if (hasChoice)
@@ -230,7 +261,8 @@ public static class LineEvaluator
                         // Hors de la ligne : il termine au mieux (en voyant les cartes)
                         var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, settings);
                         if (options.Count == 0) options = legal;
-                        value = options.Max(card => Play(played, card));
+                        var lineOver = !lineCard.HasValue;
+                        value = options.Max(card => Play(played, card, lineOver));
                     }
                 }
             }
@@ -238,24 +270,18 @@ public static class LineEvaluator
             {
                 // À la défense : elle choisit la réponse la plus gênante parmi les coups du moteur,
                 // plus la possibilité de couvrir (le moteur l'interdit parfois à tort en 2e main)
-                var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, settings);
-                if (position == 1)
-                {
-                    var cover = CheapestCover(played, initialCards);
-                    if (cover.HasValue && !options.Contains(cover.Value))
-                        options = options.Append(cover.Value).ToList();
-                }
-                value = options.Min(card => Play(played, card));
+                var options = DefenceOptions(played, initialCards, cardsEWList, cardsNSList, cardsNS, settings);
+                value = options.Min(card => Play(played, card, offline));
             }
 
-            memo[memoKey] = value;
+            cache[memoKey] = value;
             return value;
         }
 
-        int Play(Cards played, Face card)
+        int Play(Cards played, Face card, bool offline = false)
         {
             played.Add(card);
-            var value = Search(played);
+            var value = Search(played, offline);
             played.RemoveAt(played.Count() - 1);
             return value;
         }
@@ -277,6 +303,41 @@ public static class LineEvaluator
                 return sequence[n];
         }
         return null;
+    }
+
+    /// <summary>
+    /// Cartes que la défense peut envisager. Par défaut : les coups du moteur, plus la possibilité de couvrir
+    /// en 2e main. Avec <see cref="MiniMax.MiniMaxSettings.FullDefence"/> : toutes ses cartes
+    /// (une seule par « petite carte », elles sont équivalentes pour le déclarant).
+    /// </summary>
+    private static List<Face> DefenceOptions(Cards played, Dictionary<Player, List<Face>> initialCards,
+        List<Face> cardsEWList, List<Face> cardsNSList, Face[] cardsNS, MiniMax.MiniMaxSettings settings)
+    {
+        var position = played.Count() % 4;
+        if (settings?.FullDefence == true)
+        {
+            var trick = played.Chunk(4).Last();
+            var leader = initialCards.First(x => x.Value.Contains(trick[0])).Key;
+            var player = (Player)(((int)leader + trick.Length) % 4);
+            var cards = initialCards[player].Except(played.Data).ToList();
+            if (cards.Count == 0)
+                return [Face.Dummy];
+            // Les « petites cartes » (notées x) sont interchangeables : on n'en garde qu'une
+            var converted = cards.ConvertToSmallCards(cardsNS);
+            var small = cards.Where((c, i) => converted[i] == Face.SmallCard).ToList();
+            var result = cards.Where((c, i) => converted[i] != Face.SmallCard).ToList();
+            if (small.Count > 0)
+                result.Add(small.Min());
+            return result;
+        }
+        var options = MiniMax.GetPlayableCards(initialCards, played, cardsEWList, cardsNSList, settings);
+        if (position == 1)
+        {
+            var cover = CheapestCover(played, initialCards);
+            if (cover.HasValue && !options.Contains(cover.Value))
+                options = options.Append(cover.Value).ToList();
+        }
+        return options;
     }
 
     /// <summary>Plus petite carte du 2e joueur qui bat la carte d'entame, s'il en a une.</summary>
@@ -305,5 +366,22 @@ public static class LineEvaluator
         var lead = played.Chunk(4).Last().First();
         var hand = initialCards[Player.North].Contains(lead) ? south : north;
         return hand.Count == 0 ? [Face.Dummy] : hand;
+    }
+
+    /// <summary>
+    /// Mémoire partagée par toutes les lignes jugées pour une même combinaison : valeur des fins de coup
+    /// (une fois la ligne épuisée), par main d'Est.
+    /// </summary>
+    public class JudgeCache
+    {
+        private readonly Dictionary<string, Dictionary<string, int>> tails = new();
+
+        public Dictionary<string, int> For(Face[] east)
+        {
+            var key = Utils.CardsToString(east);
+            if (!tails.TryGetValue(key, out var tail))
+                tails[key] = tail = new Dictionary<string, int>();
+            return tail;
+        }
     }
 }

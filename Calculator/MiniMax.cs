@@ -18,6 +18,9 @@ public static class MiniMax
 
         /// <summary>Nombre d'entrées en Sud pour jouer la couleur depuis Sud ; null = illimité (même règle que pour Nord).</summary>
         public int? EntriesSouth { get; init; }
+
+        /// <summary>Juge seulement : la défense peut jouer n'importe laquelle de ses cartes (pas seulement les coups du moteur).</summary>
+        public bool FullDefence { get; init; }
     }
 
     /// <summary>

@@ -45,19 +45,21 @@ public class SuitAnalysis
     {
         // Le juge laisse toujours la défense fournir de fausses cartes, comme l'original (mesuré : plus proche)
         var judgeSettings = new MiniMax.MiniMaxSettings { UseFalsecards = true, EntriesNorth = settings?.EntriesNorth, EntriesSouth = settings?.EntriesSouth };
+        var cache = new LineEvaluator.JudgeCache();
         var roughLines = result.LineItems.Select(line => (Line: line, Outcomes: LineComparison.Outcomes(line, result))).ToList();
         var candidates = LineComparison.Candidates(roughLines, l => l.Outcomes, perCriterion);
         var judged = candidates
-            .Select(c => (Line: c.Line, Outcomes: LineEvaluator.Outcomes(c.Line, result, judgeSettings)))
+            .Select(c => (Line: c.Line, Outcomes: LineEvaluator.Outcomes(c.Line, result, judgeSettings, cache: cache)))
             .ToList();
-        return new SuitAnalysis(result, judged) { JudgeSettings = judgeSettings };
+        return new SuitAnalysis(result, judged) { JudgeSettings = judgeSettings, Cache = cache };
     }
 
     private MiniMax.MiniMaxSettings JudgeSettings { get; init; }
+    private LineEvaluator.JudgeCache Cache { get; init; }
 
     /// <summary>Déroulement de la ligne contre une main d'Est donnée (clé = main d'Est réelle, comme dans <see cref="OutcomesOf"/>).</summary>
     public List<Face> PlayOf(LineItem line, string eastKey) =>
-        LineEvaluator.PlayFor(line, Result, Utils.StringToCardArray(eastKey), JudgeSettings);
+        LineEvaluator.PlayFor(line, Result, Utils.StringToCardArray(eastKey), JudgeSettings, Cache);
 
     public Dictionary<string, (double Probability, int Tricks)> OutcomesOf(LineItem line) =>
         Lines.FirstOrDefault(l => l.Line == line).Outcomes ?? new Dictionary<string, (double Probability, int Tricks)>();
