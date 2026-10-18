@@ -1,0 +1,18 @@
+name: Cache NuGet (outil local)
+on:
+  workflow_dispatch:
+jobs:
+  cache:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore Verification/Verification.csproj
+      - run: tar czf nuget-packages.tgz -C ~/.nuget packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: nuget-packages.tgz
+          retention-days: 7
