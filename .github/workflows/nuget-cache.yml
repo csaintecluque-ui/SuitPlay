@@ -1,6 +1,8 @@
 name: Cache NuGet (outil local)
 on:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   cache:
     runs-on: ubuntu-latest
@@ -10,9 +12,11 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet restore Verification/Verification.csproj
-      - run: tar czf nuget-packages.tgz -C ~/.nuget packages
-      - uses: actions/upload-artifact@v4
-        with:
-          name: nuget-packages
-          path: nuget-packages.tgz
-          retention-days: 7
+      - name: Publier le cache sur la branche nuget-cache
+        run: |
+          mkdir /tmp/cache && cd /tmp/cache
+          tar czf - -C ~/.nuget packages | split -b 40m - nuget.tgz.part-
+          ls -la
+          git init -q -b nuget-cache && git add . 
+          git -c user.name=ci -c user.email=ci@example.com commit -qm "Cache NuGet"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" nuget-cache
