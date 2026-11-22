@@ -263,6 +263,8 @@ details.dist summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .distt td.num { text-align: right; white-space: nowrap; }
 
 .foot { color: var(--muted); font-size: .75rem; text-align: center; margin-top: 18px; }
+.theme-btn { font: inherit; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; min-height: 40px; cursor: pointer; }
+.theme-btn:hover { color: var(--text); }
 
 /* Chargement */
 .loading { text-align: center; padding: 30vh 16px 0; color: var(--muted); }

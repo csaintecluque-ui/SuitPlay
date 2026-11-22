@@ -15,6 +15,19 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <script>
+        // Thème clair ou sombre : sans choix, l'appli suit l'appareil ; le choix (bouton en bas de page) est gardé.
+        (function () {
+            try { var t = localStorage.getItem('suitplay.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { }
+            window.suitplayTheme = function () {
+                var cur = document.documentElement.getAttribute('data-theme');
+                var dark = cur ? cur === 'dark' : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                var next = dark ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                try { localStorage.setItem('suitplay.theme', next); } catch (e) { }
+            };
+        })();
+    </script>
     <link rel="stylesheet" href="css/app.css" />
     <script type="importmap"></script>
 </head>
