@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>SuitPlay</title>
+    <base href="/SuitPlay/" />
+    <meta name="description" content="Meilleur maniement d'une couleur au bridge" />
+    <meta name="theme-color" content="#1E5B45" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="SuitPlay" />
+    <link href="_framework/dotnet.vruu1hd5mt.js" rel="preload" as="script" fetchpriority="high" crossorigin="anonymous" integrity="sha256-S4y5ONUs78sW6CPoTeJWXoT1BZh+Sn9JuEPGv0BYqp0=" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <script>
+        // Thème clair ou sombre : sans choix, l'appli suit l'appareil ; le choix (bouton en bas de page) est gardé.
+        (function () {
+            try { var t = localStorage.getItem('suitplay.theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) { }
+            window.suitplayTheme = function () {
+                var cur = document.documentElement.getAttribute('data-theme');
+                var dark = cur ? cur === 'dark' : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                var next = dark ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                try { localStorage.setItem('suitplay.theme', next); } catch (e) { }
+            };
+        })();
+    </script>
+    <link rel="stylesheet" href="css/app.css" />
+    <script type="importmap">{
+  "imports": {
+    "./_framework/blazor.webassembly.js": "./_framework/blazor.webassembly.w3qd1tpl0e.js",
+    "./_framework/dotnet.native.js": "./_framework/dotnet.native.iwpa73tuwh.js",
+    "./_framework/dotnet.runtime.js": "./_framework/dotnet.runtime.v2rwe8u38b.js",
+    "./_framework/dotnet.js": "./_framework/dotnet.vruu1hd5mt.js"
+  },
+  "scopes": {},
+  "integrity": {
+    "./_framework/blazor.webassembly.js": "sha256-lDXsDYFgm62F+YUvxES7IOTCXYpiHpU3uR45YdC6mq4=",
+    "./_framework/blazor.webassembly.w3qd1tpl0e.js": "sha256-lDXsDYFgm62F+YUvxES7IOTCXYpiHpU3uR45YdC6mq4=",
+    "./_framework/dotnet.js": "sha256-S4y5ONUs78sW6CPoTeJWXoT1BZh+Sn9JuEPGv0BYqp0=",
+    "./_framework/dotnet.native.iwpa73tuwh.js": "sha256-okRfPPAvvg1wa3RxEW7aGMkiak+JxkjAyvlKbC9lHOU=",
+    "./_framework/dotnet.native.js": "sha256-okRfPPAvvg1wa3RxEW7aGMkiak+JxkjAyvlKbC9lHOU=",
+    "./_framework/dotnet.runtime.js": "sha256-6SBqDbLLy460Bxd7wMZoiO97hZfLTuF+HRhWT3elS7U=",
+    "./_framework/dotnet.runtime.v2rwe8u38b.js": "sha256-6SBqDbLLy460Bxd7wMZoiO97hZfLTuF+HRhWT3elS7U=",
+    "./_framework/dotnet.vruu1hd5mt.js": "sha256-S4y5ONUs78sW6CPoTeJWXoT1BZh+Sn9JuEPGv0BYqp0="
+  }
+}</script>
+</head>
+
+<body>
+    <div id="app">
+        <div class="loading">
+            <div class="loading-card">♠</div>
+            <p>Chargement de SuitPlay…</p>
+            <p class="loading-hint">Le premier chargement peut prendre quelques secondes.</p>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        Une erreur est survenue.
+        <a href="" class="reload">Recharger</a>
+        <a class="dismiss">✕</a>
+    </div>
+    <script src="_framework/blazor.webassembly.w3qd1tpl0e.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });
+        }
+    </script>
+</body>
+
+</html>
